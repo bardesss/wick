@@ -9,6 +9,7 @@ import io.github.bardesss.wick.db.PendingMarkAllEntity
 import io.github.bardesss.wick.db.PendingMarkEntity
 import io.github.bardesss.wick.db.QueueDao
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -95,6 +96,13 @@ class MarkQueue(
         }
     }
 
+    /** Returns once every [mark] and [markAll] made before this call has been applied to Room. */
+    suspend fun awaitApplied() {
+        val done = CompletableDeferred<Unit>()
+        ops.trySend { done.complete(Unit) }
+        done.await()
+    }
+
     /** Sends what is queued. Returns true when nothing is left in the queue. */
     suspend fun flush(): Boolean = flushLock.withLock { flushLocked() }
 
@@ -106,6 +114,9 @@ class MarkQueue(
         flushLocked()
         block()
     }
+
+    /** Runs [block] while no flush or fetch can run, without flushing first. */
+    suspend fun <T> quiesced(block: suspend () -> T): T = flushLock.withLock { block() }
 
     private suspend fun flushLocked(): Boolean {
         var clean = true

@@ -18,6 +18,7 @@ import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.sync.inMemoryDb
 import io.github.bardesss.wick.sync.newQueue
 import io.github.bardesss.wick.ui.login.LoginMessages
+import io.github.bardesss.wick.ui.picker.PickerEntry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -406,5 +407,115 @@ class ListViewModelTest {
         assertEquals(setOf("b"), settle(vm.read) { it == setOf("b") })
         gate.complete(Unit)
         settle(vm.refreshing) { !it }
+    }
+
+    @Test
+    fun mark_all_uses_view_feeds_and_newest_loaded() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        api.addItem("c", "feed/2", 300)
+        val vm = vm()
+        ids(vm, listOf("c", "b", "a"))
+        vm.select(StreamId.Folder("News"))
+        ids(vm, listOf("b", "a"))
+        // arrives after the list was loaded, so mark all must leave it alone
+        api.addItem("d", "feed/1", 250)
+
+        vm.markAllRead()
+
+        assertEquals(listOf("d"), ids(vm, listOf("d")))
+        assertEquals(listOf(StreamId.Folder("News").raw to 200_000_000L), api.markAllCalls)
+        assertTrue(api.isRead("a") && api.isRead("b"))
+        assertFalse(api.isRead("c") || api.isRead("d"))
+        val c = db.itemDao().byIds(listOf("c")).first().single()
+        assertFalse(c.read)
+    }
+
+    @Test
+    fun cold_start_restores_view_header() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        db.itemDao().upsertKeepingLocal(
+            listOf(
+                ItemEntity("a", "feed/1", "T a", null, 100, null, read = false),
+                ItemEntity("b", "feed/1", "T b", null, 200, null, read = false),
+            ),
+        )
+        db.snapshotDao().replaceSnapshot(listOf("b", "a"), writtenAtMs = now, viewRaw = StreamId.Folder("News").raw)
+
+        val vm = vm()
+
+        assertEquals(StreamId.Folder("News"), settle(vm.view) { it == StreamId.Folder("News") })
+        assertEquals("News", settle(vm.viewName) { it == "News" })
+        assertEquals(listOf("b", "a"), ids(vm, listOf("b", "a")))
+    }
+
+    @Test
+    fun picker_lists_folders_with_counts() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+
+        val entries = settle(vm.picker) { it.size > 1 }
+
+        assertEquals(PickerEntry.All(2), entries.first())
+        assertEquals(PickerEntry.Folder("News", 2), entries[1])
+    }
+
+    @Test
+    fun mark_all_with_nothing_loaded_does_nothing() = runTest(main, timeout = 30.seconds) {
+        engine()
+        val vm = vm()
+        ids(vm, emptyList())
+        settle(vm.refreshing) { !it }
+        api.addItem("a", "feed/1", 100)
+
+        vm.markAllRead()
+        runCurrent()
+
+        assertFalse(settle(vm.canMarkAll) { it })
+        assertTrue(api.markAllCalls.isEmpty())
+        assertFalse(api.isRead("a"))
+    }
+
+    @Test
+    fun selecting_the_current_view_refreshes() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.refreshing) { !it }
+        api.addItem("c", "feed/2", 300)
+
+        vm.select(StreamId.All)
+
+        assertEquals(listOf("c", "b", "a"), ids(vm, listOf("c", "b", "a")))
+    }
+
+    @Test
+    fun initial_view_seeds_the_header_before_anything_loads() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = ListViewModel(
+            savedState = SavedStateHandle(), itemDao = db.itemDao(), feedDao = db.feedDao(), snapshotDao = db.snapshotDao(),
+            sync = sync, queue = queue, settings = settings, creds = creds, appScope = backgroundScope,
+            initialView = StreamId.Folder("News").raw, clock = { now }, work = main,
+        )
+        assertEquals(StreamId.Folder("News"), vm.view.value)
+    }
+
+    @Test
+    fun stale_view_from_another_account_falls_back_to_all() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = ListViewModel(
+            savedState = SavedStateHandle(), itemDao = db.itemDao(), feedDao = db.feedDao(), snapshotDao = db.snapshotDao(),
+            sync = sync, queue = queue, settings = settings, creds = creds, appScope = backgroundScope,
+            initialView = StreamId.Folder("Other account folder").raw, clock = { now }, work = main,
+        )
+
+        assertEquals(StreamId.All, settle(vm.view) { it == StreamId.All })
+        assertEquals(listOf("b", "a"), ids(vm, listOf("b", "a")))
     }
 }

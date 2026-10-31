@@ -16,4 +16,18 @@
     <string name="sheet_age">%1$s ago</string>
     <string name="sheet_no_text">This feed doesn\'t include any text</string>
     <string name="sheet_open_browser">Open in browser</string>
+    <string name="list_choose_view">Choose view</string>
+    <string name="row_show_text">Show text</string>
+    <string name="row_mark_read">Mark read</string>
+    <string name="row_mark_unread">Mark unread</string>
+    <string name="picker_mark_all">Mark all read</string>
+    <string name="picker_mark_all_armed">Tap again to mark %1$d read</string>
+    <string name="settings_sort">Sort order</string>
+    <string name="settings_newest_first">Newest first</string>
+    <string name="settings_oldest_first">Oldest first</string>
+    <string name="settings_haptics">Haptics</string>
+    <string name="settings_on">On</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_sign_out">Sign out</string>
 </resources>
