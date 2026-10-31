@@ -1,8 +1,11 @@
+import com.android.build.api.variant.BuildConfigField
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 android {
@@ -25,6 +28,8 @@ android {
         }
     }
 
+    // The fake server mode is in every build type except release, so R8 removes it there.
+    // The baseline profile plugin adds benchmarkRelease and nonMinifiedRelease, which get it too.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -47,7 +52,19 @@ kotlin {
     jvmToolchain(21)
 }
 
+// The fake server mode is in every build type except release, so R8 removes it there.
+// The baseline profile plugin adds benchmarkRelease and nonMinifiedRelease, which get it too.
+androidComponents {
+    onVariants { variant ->
+        val enabled = variant.buildType != "release"
+        variant.buildConfigFields?.put("FAKE_ENABLED", BuildConfigField("boolean", enabled.toString(), null))
+    }
+}
+
 dependencies {
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

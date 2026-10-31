@@ -16,6 +16,7 @@ import io.github.bardesss.wick.data.KeystoreCredentialStore
 import io.github.bardesss.wick.data.KeystoreTokenCipher
 import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.WickDb
+import io.github.bardesss.wick.fake.FakeServerMode
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.ui.settings.AccountSwitch
@@ -48,7 +49,9 @@ class AppContainer(val context: Context) {
 
     val http: OkHttpClient by lazy { OkHttpClient() }
 
-    val api: ReaderApi by lazy { GReaderApi(http) { creds.auth() } }
+    val api: ReaderApi by lazy {
+        if (BuildConfig.FAKE_ENABLED && FakeServerMode.active) FakeServerMode.Api() else GReaderApi(http) { creds.auth() }
+    }
     val markQueue: MarkQueue by lazy { MarkQueue(api, queueDao, itemDao, appScope, inTransaction = { block -> db.withTransaction { block() } })
     }
     val syncEngine: SyncEngine by lazy { SyncEngine(api, db, markQueue) }

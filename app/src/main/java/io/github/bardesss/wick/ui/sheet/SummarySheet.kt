@@ -1,5 +1,6 @@
 package io.github.bardesss.wick.ui.sheet
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -90,7 +94,10 @@ fun SummarySheet(
         scrimColor = Scrim,
         dragHandle = { BottomSheetDefaults.DragHandle(width = 36.dp, height = 4.dp, color = WickColors.Handle) },
     ) {
-        SheetContent(row, body, nowSec, onOpen)
+        // the sheet is its own window, so it needs its own resource id switch
+        Box(Modifier.semantics { testTagsAsResourceId = true }.testTag("sheet")) {
+            SheetContent(row, body, nowSec, onOpen)
+        }
     }
 }
 

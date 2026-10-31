@@ -1,4 +1,4 @@
-pluginManagement {
+﻿pluginManagement {
     repositories {
         google {
             content {
@@ -22,3 +22,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "wick"
 include(":app")
+include(":baselineprofile")
+
