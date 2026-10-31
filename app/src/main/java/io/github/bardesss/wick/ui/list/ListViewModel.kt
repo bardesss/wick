@@ -77,13 +77,15 @@ class ListViewModel(
     private val creds: CredentialStore,
     /** Outlives the view model, for work that must finish when the app goes to the background. */
     private val appScope: CoroutineScope,
+    /** The view shown last time, for the first frame; the stored list decides if it differs. */
+    initialView: String? = null,
     private val clock: () -> Long = System::currentTimeMillis,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
     // A saved view means the process was rebuilt under the user, not opened fresh.
     private val restored = savedState.contains(KEY_VIEW)
 
-    private val _view = MutableStateFlow(StreamId.parse(savedState[KEY_VIEW] ?: StreamId.All.raw))
+    private val _view = MutableStateFlow(StreamId.parse(savedState[KEY_VIEW] ?: initialView ?: StreamId.All.raw))
     val view: StateFlow<StreamId> = _view.asStateFlow()
 
     private val tracker = SeenTracker()
@@ -134,6 +136,11 @@ class ListViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** Whether "Mark all read" has rows to take its cutoff from. */
+    val canMarkAll: StateFlow<Boolean> = rows.map { !it.isNullOrEmpty() }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     /** The drawer list with the icons resolved against the server. */
     val picker: StateFlow<List<PickerEntry>> = combine(feedDao.all(), sync.displayedCounts()) { feeds, counts ->
         val server = creds.auth()?.server.orEmpty()
@@ -173,9 +180,13 @@ class ListViewModel(
     fun refresh() = startRefresh(indicator = true)
 
     fun select(view: StreamId) {
-        if (view == _view.value) return
+        if (view == _view.value) {
+            startRefresh(indicator = true)
+            return
+        }
         _view.value = view
         savedState[KEY_VIEW] = view.raw
+        appScope.launch { settings.setLastView(view.raw) }
         viewModelScope.launch {
             // show what is stored for the view at once; the refresh then brings it up to date
             val feedIds = feedIdsOf(view, feedDao.feedsNow())
@@ -190,8 +201,11 @@ class ListViewModel(
      */
     fun markAllRead() {
         val v = _view.value
+        // with nothing loaded there is no cutoff to mark up to
+        val loaded = rows.value
+        if (loaded.isNullOrEmpty()) return
         viewModelScope.launch {
-            val newest = rows.value?.maxOfOrNull { it.publishedSec } ?: (clock() / 1000)
+            val newest = loaded.maxOf { it.publishedSec }
             queue.markAll(v, feedIdsOf(v, feedDao.feedsNow()), newest)
             // the refresh must see the mark-all in the queue
             queue.awaitApplied()
@@ -350,6 +364,7 @@ class ListViewModel(
                     settings = c.settings,
                     creds = c.creds,
                     appScope = c.appScope,
+                    initialView = c.startView,
                 )
             }
         }

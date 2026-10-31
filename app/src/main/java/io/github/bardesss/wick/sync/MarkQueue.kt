@@ -115,6 +115,9 @@ class MarkQueue(
         block()
     }
 
+    /** Runs [block] while no flush or fetch can run, without flushing first. */
+    suspend fun <T> quiesced(block: suspend () -> T): T = flushLock.withLock { block() }
+
     private suspend fun flushLocked(): Boolean {
         var clean = true
 

@@ -2,6 +2,8 @@ package io.github.bardesss.wick.ui.settings
 
 import io.github.bardesss.wick.api.Auth
 import io.github.bardesss.wick.data.CredentialStore
+import io.github.bardesss.wick.data.MemoryPreferences
+import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.CountEntity
 import io.github.bardesss.wick.db.FeedEntity
 import io.github.bardesss.wick.db.ItemEntity
@@ -65,7 +67,7 @@ class SignOutTest {
         queue.awaitApplied()
         var imagesCleared = false
 
-        signOut(queue, creds, db, clearImages = { imagesCleared = true })
+        signOut(queue, creds, wipe = { wipeAccount(queue, db) { imagesCleared = true } })
 
         // the queued mark was sent before anything was wiped
         assertEquals(listOf(listOf("a") to true), api.setReadCalls)
@@ -88,10 +90,48 @@ class SignOutTest {
         api.beforeSetRead = { awaitCancellation() }
         var imagesCleared = false
 
-        signOut(queue, creds, db, clearImages = { imagesCleared = true })
+        signOut(queue, creds, wipe = { wipeAccount(queue, db) { imagesCleared = true } })
 
         assertNull(creds.auth())
         assertTrue(db.feedDao().feedsNow().isEmpty())
         assertTrue(imagesCleared)
+    }
+
+    @Test
+    fun same_account_after_401_keeps_pending_marks() = runTest(timeout = 30.seconds) {
+        seed()
+        val settings = SettingsStore(MemoryPreferences())
+        val queue = db.newQueue(api, backgroundScope)
+        val switch = AccountSwitch(settings) { wipeAccount(queue, db) {} }
+        switch.enter("https://feeds.example.com\nme")
+        queue.mark("a", read = true, manual = false)
+        queue.awaitApplied()
+
+        // the server rejected the key; the user signs in again with a new one
+        creds.clear()
+        switch.enter("https://feeds.example.com\nme")
+
+        assertEquals(listOf("a"), db.queueDao().pending().map { it.itemId })
+        assertEquals(1, db.feedDao().feedsNow().size)
+    }
+
+    @Test
+    fun different_account_wipes_previous_data() = runTest(timeout = 30.seconds) {
+        seed()
+        val settings = SettingsStore(MemoryPreferences())
+        val queue = db.newQueue(api, backgroundScope)
+        var imagesCleared = false
+        val switch = AccountSwitch(settings) { wipeAccount(queue, db) { imagesCleared = true } }
+        switch.enter("https://feeds.example.com\nme")
+        queue.mark("a", read = true, manual = false)
+        queue.awaitApplied()
+
+        switch.enter("https://feeds.example.com\nsomeone")
+
+        assertTrue(db.queueDao().pending().isEmpty())
+        assertTrue(db.feedDao().feedsNow().isEmpty())
+        assertTrue(db.itemDao().byIds(listOf("a")).first().isEmpty())
+        assertTrue(imagesCleared)
+        assertEquals("https://feeds.example.com\nsomeone", settings.account())
     }
 }

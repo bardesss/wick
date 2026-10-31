@@ -18,10 +18,13 @@ import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
+import io.github.bardesss.wick.ui.settings.AccountSwitch
+import io.github.bardesss.wick.ui.settings.wipeAccount
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
 import java.io.File
@@ -49,6 +52,13 @@ class AppContainer(val context: Context) {
     val markQueue: MarkQueue by lazy { MarkQueue(api, queueDao, itemDao, appScope, inTransaction = { block -> db.withTransaction { block() } })
     }
     val syncEngine: SyncEngine by lazy { SyncEngine(api, db, markQueue) }
+
+    val accountSwitch: AccountSwitch by lazy {
+        AccountSwitch(settings) { wipeAccount(markQueue, db, ::clearImages) }
+    }
+
+    /** The view shown last time, read once so the first frame can have the right header. */
+    val startView: String? by lazy { runBlocking { settings.lastView() } }
 
     val imageLoader: ImageLoader by lazy {
         // shares the connection pool with the API client, but only favicon requests get the key

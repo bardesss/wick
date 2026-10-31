@@ -462,4 +462,46 @@ class ListViewModelTest {
         assertEquals(PickerEntry.All(2), entries.first())
         assertEquals(PickerEntry.Folder("News", 2), entries[1])
     }
+
+    @Test
+    fun mark_all_with_nothing_loaded_does_nothing() = runTest(main, timeout = 30.seconds) {
+        engine()
+        val vm = vm()
+        ids(vm, emptyList())
+        settle(vm.refreshing) { !it }
+        api.addItem("a", "feed/1", 100)
+
+        vm.markAllRead()
+        runCurrent()
+
+        assertFalse(settle(vm.canMarkAll) { it })
+        assertTrue(api.markAllCalls.isEmpty())
+        assertFalse(api.isRead("a"))
+    }
+
+    @Test
+    fun selecting_the_current_view_refreshes() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.refreshing) { !it }
+        api.addItem("c", "feed/2", 300)
+
+        vm.select(StreamId.All)
+
+        assertEquals(listOf("c", "b", "a"), ids(vm, listOf("c", "b", "a")))
+    }
+
+    @Test
+    fun initial_view_seeds_the_header_before_anything_loads() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = ListViewModel(
+            savedState = SavedStateHandle(), itemDao = db.itemDao(), feedDao = db.feedDao(), snapshotDao = db.snapshotDao(),
+            sync = sync, queue = queue, settings = settings, creds = creds, appScope = backgroundScope,
+            initialView = StreamId.Folder("News").raw, clock = { now }, work = main,
+        )
+        assertEquals(StreamId.Folder("News"), vm.view.value)
+    }
 }

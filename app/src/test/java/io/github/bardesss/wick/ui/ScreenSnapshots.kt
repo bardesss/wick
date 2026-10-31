@@ -217,6 +217,7 @@ class ScreenSnapshots {
             entries = pickerEntries,
             selected = StreamId.Feed("feed/2"),
             markCount = 52,
+            markEnabled = true,
             armed = arm.armed,
             animate = false,
             onSelect = {},

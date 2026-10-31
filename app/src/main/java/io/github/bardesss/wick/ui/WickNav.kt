@@ -24,6 +24,11 @@ import io.github.bardesss.wick.ui.login.LoginScreen
 import io.github.bardesss.wick.ui.login.LoginViewModel
 import io.github.bardesss.wick.ui.settings.SettingsScreen
 import io.github.bardesss.wick.ui.settings.signOut
+import io.github.bardesss.wick.ui.settings.wipeAccount
+import io.github.bardesss.wick.ui.theme.WickColors
+import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -31,6 +36,8 @@ import kotlinx.coroutines.launch
 fun WickNav(container: AppContainer) {
     val auth by container.creds.authFlow.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    // the list is gone while the account is wiped, so nothing can write to the database meanwhile
+    var signingOut by remember { mutableStateOf(false) }
     val session: SessionScope = viewModel { SessionScope(createSavedStateHandle()) }
     // view models for the signed in session are created from the activity's extras, so their
     // saved state lives with the activity while the session store decides how long they live
@@ -40,15 +47,17 @@ fun WickNav(container: AppContainer) {
     LaunchedEffect(auth == null) {
         if (auth == null) {
             settingsOpen = false
+            signingOut = false
             session.end()
         }
     }
 
     when {
         auth == null -> {
-            val vm: LoginViewModel = viewModel(factory = LoginViewModel.factory(container.api, container.creds))
+            val vm: LoginViewModel = viewModel(factory = LoginViewModel.factory(container.api, container.creds, container.accountSwitch::enter))
             LoginScreen(vm)
         }
+        signingOut -> Box(Modifier.fillMaxSize().background(WickColors.Night))
         else -> {
             val vm: ListViewModel = viewModel(
                 viewModelStoreOwner = session,
@@ -58,10 +67,31 @@ fun WickNav(container: AppContainer) {
             )
             // the list stays composed under the settings page, so it keeps its place
             Box(Modifier.fillMaxSize()) {
-                ListScreen(vm, onOpenSettings = { settingsOpen = true })
+                Box(
+                    Modifier.fillMaxSize().then(
+                        if (settingsOpen) Modifier.semantics { hideFromAccessibility() } else Modifier,
+                    ),
+                ) {
+                    ListScreen(vm, onOpenSettings = { settingsOpen = true })
+                }
                 if (settingsOpen) {
                     BackHandler { settingsOpen = false }
-                    SettingsRoute(container, auth?.server.orEmpty())
+                    SettingsRoute(container, auth?.server.orEmpty()) {
+                        signingOut = true
+                        session.end()
+                        container.appScope.launch {
+                            try {
+                                signOut(
+                                    container.markQueue,
+                                    container.creds,
+                                    wipe = { wipeAccount(container.markQueue, container.db, container::clearImages) },
+                                    forgetAccount = { container.settings.setAccount(null) },
+                                )
+                            } finally {
+                                signingOut = false
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -69,7 +99,7 @@ fun WickNav(container: AppContainer) {
 }
 
 @Composable
-private fun SettingsRoute(container: AppContainer, server: String) {
+private fun SettingsRoute(container: AppContainer, server: String, onSignOut: () -> Unit) {
     val oldestFirst by remember { container.settings.oldestFirst.map<Boolean, Boolean?> { it } }
         .collectAsStateWithLifecycle(initialValue = null)
     val haptics by remember { container.settings.haptics.map<Boolean, Boolean?> { it } }
@@ -82,10 +112,6 @@ private fun SettingsRoute(container: AppContainer, server: String) {
         server = server,
         onOldestFirst = { scope.launch { container.settings.setOldestFirst(it) } },
         onHaptics = { scope.launch { container.settings.setHaptics(it) } },
-        onSignOut = {
-            scope.launch {
-                signOut(container.markQueue, container.creds, container.db, clearImages = container::clearImages)
-            }
-        },
+        onSignOut = onSignOut,
     )
 }
