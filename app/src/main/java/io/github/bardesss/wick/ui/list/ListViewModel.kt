@@ -214,13 +214,13 @@ class ListViewModel(
 
     fun onForeground() {
         // the first start of this view model is handled in init
-        backgroundedAt ?: return
+        val since = backgroundedAt ?: return
         backgroundedAt = null
-        viewModelScope.launch {
-            if (!busy && isStale()) startRefresh(indicator = true)
-        }
+        // only time spent away counts; a long read in the foreground keeps its list
+        if (!busy && clock() - since > STALE_MS) startRefresh(indicator = true)
     }
 
+    // After a restore the time away is unknown, so the age of the snapshot stands in for it.
     private suspend fun isStale(): Boolean = clock() - (snapshotDao.writtenAt() ?: 0L) > STALE_MS
 
     private fun startRefresh(indicator: Boolean) {

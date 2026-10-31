@@ -330,6 +330,31 @@ class ListViewModelTest {
     }
 
     @Test
+    fun only_time_away_counts_on_return() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        val before = awaitFetches(1)
+        api.addItem("c", "feed/2", 300)
+
+        // the list has been read for 40 minutes, then the user leaves for 10 seconds
+        now += 40 * 60_000L
+        vm.onBackground()
+        now += 10_000L
+        vm.onForeground()
+        runCurrent()
+        assertEquals(before, fetches)
+        assertEquals(listOf("b", "a"), vm.rows.value?.map { it.id })
+
+        vm.onBackground()
+        now += 31 * 60_000L
+        vm.onForeground()
+        assertEquals(listOf("c", "b", "a"), ids(vm, listOf("c", "b", "a")))
+        assertEquals(before + 1, fetches)
+    }
+
+    @Test
     fun restored_stale_list_refreshes() = runTest(main, timeout = 30.seconds) {
         engine()
         seedServer()
