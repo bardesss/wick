@@ -8,6 +8,18 @@ plugins {
     alias(libs.plugins.androidx.baselineprofile)
 }
 
+val appVersionName = providers.gradleProperty("versionName").getOrElse("0.1.0")
+val versionParts = Regex("""(\d+)\.(\d+)\.(\d+)""").matchEntire(appVersionName)
+    ?.groupValues?.drop(1)?.map { it.toInt() }
+    ?: throw GradleException("versionName must look like X.Y.Z, got: $appVersionName")
+if (versionParts[1] > 99 || versionParts[2] > 99) {
+    throw GradleException("minor and patch must be 99 or less, got: $appVersionName")
+}
+val appVersionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
+
+// CI decodes the release key to a file. Without it the release APK is left unsigned.
+val keystorePath = providers.environmentVariable("WICK_KEYSTORE_PATH").orNull
+
 android {
     namespace = "io.github.bardesss.wick"
     compileSdk = 36
@@ -16,12 +28,24 @@ android {
         applicationId = "io.github.bardesss.wick"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+    }
+
+    signingConfigs {
+        if (!keystorePath.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("WICK_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("WICK_KEY_ALIAS")
+                keyPassword = System.getenv("WICK_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
