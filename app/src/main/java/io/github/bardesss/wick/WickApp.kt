@@ -35,7 +35,10 @@ class WickApp : Application(), SingletonImageLoader.Factory, Configuration.Provi
         SyncWork.schedule(wm)
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {
-                container.appScope.launch { SyncWork.enqueueFlushIfPending(wm, container.queueDao) }
+                container.appScope.launch {
+                    container.markQueue.awaitApplied()
+                    SyncWork.enqueueFlushIfPending(wm, container.queueDao)
+                }
             }
         })
     }

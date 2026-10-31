@@ -102,7 +102,7 @@ class FakeReaderApi : ReaderApi {
         check()
         markAllCalls += stream.raw to olderThanUsec
         serverItems.values
-            .filter { inStream(it, stream) && it.publishedSec * 1_000_000 <= olderThanUsec }
+            .filter { inStream(it, stream) && it.publishedSec < olderThanUsec / 1_000_000 }
             .forEach { readIds += it.id }
     }
 }

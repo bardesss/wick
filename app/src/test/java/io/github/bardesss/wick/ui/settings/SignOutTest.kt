@@ -83,6 +83,17 @@ class SignOutTest {
     }
 
     @Test
+    fun credentials_are_gone_before_the_wipe_lock_is_released() = runTest(timeout = 30.seconds) {
+        seed()
+        val queue = db.newQueue(api, backgroundScope)
+
+        wipeAccount(queue, db, settings, beforeRelease = { creds.clear() }) {}
+
+        assertNull(creds.auth())
+        assertTrue(db.feedDao().feedsNow().isEmpty())
+    }
+
+    @Test
     fun sign_out_does_not_wait_for_a_stuck_flush() = runTest(timeout = 30.seconds) {
         seed()
         val queue = db.newQueue(api, backgroundScope)

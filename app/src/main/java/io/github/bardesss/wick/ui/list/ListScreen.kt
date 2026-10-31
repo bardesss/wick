@@ -63,6 +63,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
+import io.github.bardesss.wick.ui.isWebUrl
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.picker.MarkAllArm
 import io.github.bardesss.wick.ui.picker.PickerDrawer
@@ -138,7 +139,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
 
     val open = remember(vm, context) {
         { row: RowModel ->
-            row.url?.let { url ->
+            row.url?.takeIf(::isWebUrl)?.let { url ->
                 openLink(context, url)
                 vm.open(row.id)
             }

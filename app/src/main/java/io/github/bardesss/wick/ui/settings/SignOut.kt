@@ -15,9 +15,16 @@ private const val TAG = "Wick"
 
 /**
  * Empties the local copy of an account: every table and the cached images. Runs with no sync
- * or flush in progress, after the queue has applied what it was given.
+ * or flush in progress, after the queue has applied what it was given. [beforeRelease] runs
+ * last, still under that lock.
  */
-suspend fun wipeAccount(queue: MarkQueue, db: WickDb, settings: SettingsStore, clearImages: () -> Unit) {
+suspend fun wipeAccount(
+    queue: MarkQueue,
+    db: WickDb,
+    settings: SettingsStore,
+    beforeRelease: suspend () -> Unit = {},
+    clearImages: () -> Unit,
+) {
     queue.quiesced {
         queue.awaitApplied()
         withContext(Dispatchers.IO) {
@@ -26,6 +33,8 @@ suspend fun wipeAccount(queue: MarkQueue, db: WickDb, settings: SettingsStore, c
         }
         // the next account must not open on this one's folder or feed
         settings.setLastView(null)
+        // sync must not find credentials once it can run again
+        beforeRelease()
     }
     // an operation that was still on its way must not land in the fresh database
     queue.awaitApplied()

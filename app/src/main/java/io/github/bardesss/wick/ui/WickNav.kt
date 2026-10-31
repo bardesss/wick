@@ -85,7 +85,15 @@ fun WickNav(container: AppContainer) {
                                 signOut(
                                     container.markQueue,
                                     container.creds,
-                                    wipe = { wipeAccount(container.markQueue, container.db, container.settings, container::clearImages) },
+                                    wipe = {
+                                        wipeAccount(
+                                            container.markQueue,
+                                            container.db,
+                                            container.settings,
+                                            beforeRelease = { container.creds.clear() },
+                                            clearImages = container::clearImages,
+                                        )
+                                    },
                                     forgetAccount = { container.settings.setAccount(null) },
                                 )
                             } finally {
