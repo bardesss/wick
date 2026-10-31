@@ -57,6 +57,10 @@ kotlin {
 androidComponents {
     onVariants { variant ->
         val enabled = variant.buildType != "release"
+        // side by side with the real app, which fake mode must never touch
+        if (variant.buildType == "benchmarkRelease" || variant.buildType == "nonMinifiedRelease") {
+            variant.applicationId.set("io.github.bardesss.wick.bench")
+        }
         variant.buildConfigFields?.put("FAKE_ENABLED", BuildConfigField("boolean", enabled.toString(), null))
     }
 }

@@ -1,4 +1,4 @@
-﻿package io.github.bardesss.wick.fake
+package io.github.bardesss.wick.fake
 
 import io.github.bardesss.wick.AppContainer
 import io.github.bardesss.wick.api.Auth
@@ -19,6 +19,7 @@ import java.util.Random
  */
 object FakeServerMode {
     const val EXTRA = "wick.fake"
+    const val PACKAGE_SUFFIX = ".bench"
 
     @Volatile
     var active = false
@@ -62,6 +63,8 @@ object FakeServerMode {
 
     /** Replaces the stored data with [count] fake items, a stored snapshot and a signed in account. */
     suspend fun enable(container: AppContainer, count: Int) {
+        // never touch the data of the real app
+        check(container.context.packageName.endsWith(PACKAGE_SUFFIX)) { "fake mode only runs in the .bench build" }
         active = true
         val db = container.db
         db.clearAllTables()
