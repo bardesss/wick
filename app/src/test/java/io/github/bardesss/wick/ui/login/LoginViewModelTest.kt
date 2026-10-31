@@ -109,6 +109,15 @@ class LoginViewModelTest {
     }
 
     @Test
+    fun sign_in_reports_account_before_saving() {
+        val seen = mutableListOf<Pair<String, Auth?>>()
+        val vm = LoginViewModel(api, creds) { id -> seen += id to creds.auth() }
+        vm.signIn(" example.com/ ", " me ", "key")
+        assertEquals(listOf<Pair<String, Auth?>>("https://example.com\nme" to null), seen)
+        assertEquals(Auth("https://example.com", "tok"), creds.auth())
+    }
+
+    @Test
     fun storage_failure_shows_message_and_clears_busy() {
         val throwing = object : CredentialStore by MemoryCreds() {
             override suspend fun save(auth: Auth) = throw java.security.KeyStoreException("no key")

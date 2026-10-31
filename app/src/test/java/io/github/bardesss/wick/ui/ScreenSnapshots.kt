@@ -31,6 +31,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.platform.LocalDensity
 import io.github.bardesss.wick.html.htmlToAnnotated
+import io.github.bardesss.wick.api.StreamId
+import io.github.bardesss.wick.ui.picker.MarkAllArm
+import io.github.bardesss.wick.ui.picker.PickerDrawer
+import io.github.bardesss.wick.ui.picker.PickerEntry
+import io.github.bardesss.wick.ui.settings.SettingsScreen
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.rememberDrawerState
 import io.github.bardesss.wick.ui.sheet.SheetBody
 import io.github.bardesss.wick.ui.sheet.SummarySheet
 
@@ -186,6 +193,70 @@ class ScreenSnapshots {
             onOpenPicker = {},
             onOpen = {},
             onFrame = { false },
+        )
+    }
+
+    private val pickerEntries = listOf(
+        PickerEntry.All(87),
+        PickerEntry.Folder("Food", 0),
+        PickerEntry.Feed("feed/6", "Cooking Weekly", null, 0, indented = true),
+        PickerEntry.Folder("Tech", 71),
+        PickerEntry.Feed("feed/3", "Android Developers", null, 12, indented = true),
+        PickerEntry.Feed("feed/2", "Hacker News", null, 52, indented = true),
+        PickerEntry.Feed("feed/7", "Simon Willison", null, 7, indented = true),
+        PickerEntry.Folder("Travel", 16),
+        PickerEntry.Feed("feed/4", "Rail News", null, 16, indented = true),
+        PickerEntry.Feed("feed/5", "Alpha notes", null, 0, indented = false),
+        PickerEntry.Feed("feed/1", "Personal blog", null, 0, indented = false),
+    )
+
+    private fun drawer(name: String, armed: Boolean) = snap(name) {
+        val arm = remember { MarkAllArm().also { if (armed) it.arm() } }
+        PickerDrawer(
+            state = rememberDrawerState(DrawerValue.Open),
+            entries = pickerEntries,
+            selected = StreamId.Feed("feed/2"),
+            markCount = 52,
+            markEnabled = true,
+            armed = arm.armed,
+            animate = false,
+            onSelect = {},
+            onMarkAll = {},
+            onSettings = {},
+        ) {
+            ListContent(
+                viewName = "Hacker News",
+                count = 52,
+                message = null,
+                rows = sample,
+                read = remember { mutableStateOf(setOf("1", "4", "6")) },
+                nowSec = now,
+                refreshing = false,
+                listState = rememberLazyListState(),
+                onRefresh = {},
+                onOpenPicker = {},
+                onOpen = {},
+                onFrame = { false },
+            )
+        }
+    }
+
+    @Test
+    fun drawer_open() = drawer("drawer_open", armed = false)
+
+    @Test
+    fun drawer_armed() = drawer("drawer_armed", armed = true)
+
+    @Test
+    fun settings() = snap("settings") {
+        SettingsScreen(
+            oldestFirst = false,
+            haptics = true,
+            server = "https://feeds.example.com",
+            onOldestFirst = {},
+            onHaptics = {},
+            onSignOut = {},
+            version = "0.1.0",
         )
     }
 }

@@ -45,9 +45,14 @@ fun normaliseServer(raw: String): String {
     return s
 }
 
+/** Names the account a sign in is for, to tell a new key for the same account from another account. */
+fun accountId(server: String, user: String): String = normaliseServer(server).lowercase() + "\n" + user.trim()
+
 class LoginViewModel(
     private val api: ReaderApi,
     private val creds: CredentialStore,
+    /** Runs before the credentials are saved; the app uses it to drop another account's data. */
+    private val onAccount: suspend (String) -> Unit = {},
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginState())
@@ -71,6 +76,7 @@ class LoginViewModel(
                 return@launch
             }
             try {
+                onAccount(accountId(base, user))
                 creds.save(Auth(base, token))
                 _state.update { it.copy(busy = false) }
             } catch (e: CancellationException) {
@@ -82,9 +88,11 @@ class LoginViewModel(
     }
 
     companion object {
-        fun factory(api: ReaderApi, creds: CredentialStore) = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T = LoginViewModel(api, creds) as T
-        }
+        fun factory(api: ReaderApi, creds: CredentialStore, onAccount: suspend (String) -> Unit = {}) =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                    LoginViewModel(api, creds, onAccount) as T
+            }
     }
 }
