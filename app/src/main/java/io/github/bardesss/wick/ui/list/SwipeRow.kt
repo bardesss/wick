@@ -55,6 +55,13 @@ fun rubberBand(dxPx: Float, thresholdPx: Float): Float {
     return if (d <= linear) dxPx else sign(dxPx) * (linear + (d - linear) * RESIST)
 }
 
+/** The finger travel that [rubberBand] turns into [offsetPx]. */
+fun unRubberBand(offsetPx: Float, thresholdPx: Float): Float {
+    val linear = thresholdPx * LINEAR_FACTOR
+    val d = abs(offsetPx)
+    return if (d <= linear) offsetPx else sign(offsetPx) * (linear + (d - linear) / RESIST)
+}
+
 /** Which way a touch is going. A row only claims it once it is past [slop] and mostly sideways. */
 fun swipeAxis(dx: Float, dy: Float, slop: Float): SwipeAxis = when {
     abs(dx) > slop && abs(dx) > abs(dy) -> SwipeAxis.Horizontal
@@ -143,7 +150,9 @@ fun SwipeRow(
                             SwipeAxis.Undecided -> Unit
                         }
                     }
+                    // pick up from wherever a spring back left the row, and count travel from the slop on
                     settle[0]?.cancel()
+                    dx = unRubberBand(offset.floatValue, threshold) + dx - sign(dx) * viewConfiguration.touchSlop
                     var past = abs(dx) >= threshold
                     if (past) tick()
                     offset.floatValue = rubberBand(dx, threshold)

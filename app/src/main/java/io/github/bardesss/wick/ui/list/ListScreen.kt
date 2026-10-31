@@ -116,6 +116,7 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
     val markedRead = stringResource(R.string.list_marked_read)
     val markedUnread = stringResource(R.string.list_marked_unread)
     var sheetId by rememberSaveable { mutableStateOf<String?>(null) }
+    val sheetKept = remember { arrayOfNulls<RowModel>(1) }
 
     val open = remember(vm, context) {
         { row: RowModel ->
@@ -153,7 +154,9 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
         snackbar = snackbar,
     )
 
-    val sheetRow = sheetId?.let { id -> rows?.firstOrNull { it.id == id } }
+    // a refresh may drop the row; the open sheet keeps showing it until the user closes it
+    val sheetRow = sheetId?.let { id -> rows?.firstOrNull { it.id == id } ?: sheetKept[0]?.takeIf { it.id == id } }
+    sheetKept[0] = sheetRow
     if (sheetRow != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val body by produceState<SheetBody>(SheetBody.Loading, sheetRow.id) {

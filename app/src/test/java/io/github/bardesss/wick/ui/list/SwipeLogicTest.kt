@@ -39,6 +39,13 @@ class SwipeLogicTest {
     }
 
     @Test
+    fun rubber_band_inverts() {
+        for (dx in listOf(-300f, -110f, -20f, 0f, 50f, 110f, 210f, 400f)) {
+            assertEquals(dx, unRubberBand(rubberBand(dx, threshold), threshold), 0.001f)
+        }
+    }
+
+    @Test
     fun swipe_vertical_dominant_is_ignored() {
         assertEquals(SwipeAxis.Vertical, swipeAxis(dx = 20f, dy = 30f, slop = slop))
         assertEquals(SwipeAxis.Vertical, swipeAxis(dx = 0f, dy = -9f, slop = slop))

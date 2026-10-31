@@ -88,7 +88,7 @@ fun SummarySheet(
         contentColor = WickColors.Paper,
         tonalElevation = 0.dp,
         scrimColor = Scrim,
-        dragHandle = { BottomSheetDefaults.DragHandle(width = 36.dp, height = 4.dp, color = WickColors.Line) },
+        dragHandle = { BottomSheetDefaults.DragHandle(width = 36.dp, height = 4.dp, color = WickColors.Handle) },
     ) {
         SheetContent(row, body, nowSec, onOpen)
     }

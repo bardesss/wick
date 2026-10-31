@@ -29,7 +29,8 @@ private val blocks = setOf(
     "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre",
 )
 private val headings = setOf("h1", "h2", "h3", "h4", "h5", "h6")
-private val linkSchemes = listOf("http://", "https://", "mailto:")
+private val linkSchemes = listOf("http://", "https://")
+private const val MAX_INPUT = 200_000
 
 /**
  * Turns feed HTML into styled text for the sheet. Returns null when nothing readable is left.
@@ -38,7 +39,8 @@ private val linkSchemes = listOf("http://", "https://", "mailto:")
 fun htmlToAnnotated(html: String?): AnnotatedString? {
     if (html.isNullOrBlank()) return null
     val out = TextWriter()
-    out.children(Jsoup.parseBodyFragment(html).body())
+    // very long feeds are cut rather than parsed whole; the sheet only shows the start anyway
+    out.children(Jsoup.parseBodyFragment(html.take(MAX_INPUT)).body())
     return out.build()
 }
 
@@ -109,17 +111,21 @@ private class TextWriter {
             if (raw.isNotEmpty()) put(raw)
             return
         }
+        // each run of visible characters goes out in one piece
         var i = 0
         while (i < raw.length) {
-            val c = raw[i]
-            if (c.isWhitespace() || c == ' ') {
+            if (isGap(raw[i])) {
                 space = true
-            } else {
-                put(c.toString())
+                i++
+                continue
             }
-            i++
+            val start = i
+            while (i < raw.length && !isGap(raw[i])) i++
+            put(raw.substring(start, i))
         }
     }
+
+    private fun isGap(c: Char) = c.isWhitespace() || c == '\u00A0'
 
     private fun put(s: String) {
         if (text.isNotEmpty()) {

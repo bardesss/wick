@@ -68,6 +68,20 @@ class HtmlTextTest {
     }
 
     @Test
+    fun html_links_are_web_only() {
+        val out = htmlToAnnotated("<p><a href=\"mailto:a@e.x\">mail</a> <a href=\"javascript:x()\">js</a> <a href=\"HTTPS://e.x\">web</a></p>")
+        assertEquals("mail js web", out?.text)
+        val links = out!!.getLinkAnnotations(0, out.length)
+        assertEquals(listOf("web"), links.map { out.text.substring(it.start, it.end) })
+    }
+
+    @Test
+    fun html_long_input_is_cut() {
+        val out = htmlToAnnotated("<p>" + "word ".repeat(100_000) + "</p>")
+        assertTrue(out!!.length <= 200_000)
+    }
+
+    @Test
     fun html_collapses_blank_blocks() {
         val out = htmlToAnnotated("<div><p>One</p><br><br><br><div></div><p>Two</p></div>")
         assertEquals("One\n\nTwo", out?.text)
