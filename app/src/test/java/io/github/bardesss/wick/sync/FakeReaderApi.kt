@@ -23,6 +23,9 @@ class FakeReaderApi : ReaderApi {
     /** Runs inside setRead before the change is applied, so a test can pause a request. */
     var beforeSetRead: (suspend () -> Unit)? = null
 
+    /** Runs inside unread before the listing is built, so a test can pause a fetch. */
+    var beforeUnread: (suspend () -> Unit)? = null
+
     fun failNext(n: Int, error: ApiError = ApiError.Unreachable) {
         failures = n
         failWith = error
@@ -73,6 +76,7 @@ class FakeReaderApi : ReaderApi {
 
     override suspend fun unread(stream: StreamId, oldestFirst: Boolean, max: Int, continuation: String?): Page {
         check()
+        beforeUnread?.invoke()
         val sorted = serverItems.values
             .filter { it.id !in readIds && inStream(it, stream) }
             .sortedWith(

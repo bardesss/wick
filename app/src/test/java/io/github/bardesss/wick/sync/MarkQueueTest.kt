@@ -38,7 +38,7 @@ class MarkQueueTest {
         db.close()
     }
 
-    private fun TestScope.queue() = MarkQueue(api, db.queueDao(), db.itemDao(), backgroundScope)
+    private fun TestScope.queue() = db.newQueue(api, backgroundScope)
 
     private suspend fun seed(vararg ids: String, publishedSec: Long = 100) {
         db.itemDao().upsertKeepingLocal(
@@ -159,6 +159,23 @@ class MarkQueueTest {
         assertFalse(api.isRead("a"))
         assertEquals(listOf(listOf("a") to true, listOf("a") to false), api.setReadCalls)
         assertTrue(db.queueDao().pending().isEmpty())
+    }
+
+    @Test
+    fun failed_markAll_holds_back_item_marks() = runTest {
+        seed("old", "a", publishedSec = 100)
+        val q = queue()
+        q.markAll(StreamId.All, null, newestLoadedSec = 200)
+        q.mark("a", read = false, manual = true)
+        runCurrent()
+
+        api.failNext(1, ApiError.Http(500))
+        assertFalse(q.flush())
+        assertTrue(api.setReadCalls.isEmpty())
+        assertEquals(1, db.queueDao().pending().size)
+
+        assertTrue(q.flush())
+        assertEquals(listOf(listOf("a") to false), api.setReadCalls)
     }
 
     @Test

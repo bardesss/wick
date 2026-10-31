@@ -6,7 +6,10 @@ import io.github.bardesss.wick.db.ItemEntity
 import io.github.bardesss.wick.db.PendingMarkAllEntity
 import io.github.bardesss.wick.db.PendingMarkEntity
 import io.github.bardesss.wick.db.WickDb
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -40,8 +43,7 @@ class SyncEngineTest {
     }
 
     private fun TestScope.engine(): SyncEngine {
-        val q = MarkQueue(api, db.queueDao(), db.itemDao(), backgroundScope)
-        return SyncEngine(api, db, q)
+        return SyncEngine(api, db, db.newQueue(api, backgroundScope))
     }
 
     private fun local(id: String, feed: String, sec: Long, read: Boolean = false) =
@@ -129,7 +131,7 @@ class SyncEngineTest {
         api.addItem("c", "feed/2", 120)
         api.addItem("d", "feed/3", 130)
         api.addItem("e", "feed/3", 140, read = true)
-        val q = MarkQueue(api, db.queueDao(), db.itemDao(), backgroundScope)
+        val q = db.newQueue(api, backgroundScope)
         val engine = SyncEngine(api, db, q)
         engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
 
@@ -156,6 +158,36 @@ class SyncEngineTest {
         assertEquals(0, after["feed/2"])
         assertEquals(0, db.feedDao().counts().first()["feed/2"])
         assertEquals(0, after[StreamId.All.raw])
+    }
+
+    @Test
+    fun mark_during_slow_refresh_survives() = runTest {
+        api.addItem("a", "feed/1", 100)
+        api.addItem("b", "feed/1", 110)
+        val q = db.newQueue(api, backgroundScope)
+        val engine = SyncEngine(api, db, q)
+        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+
+        val gate = CompletableDeferred<Unit>()
+        api.beforeUnread = { gate.await() }
+        val refreshing = async { engine.refresh(StreamId.All, oldestFirst = false) }
+        runCurrent()
+
+        q.mark("a", read = true, manual = false)
+        runCurrent()
+        advanceTimeBy(3_100)
+        // the debounced flush has to wait for the refresh
+        assertTrue(api.setReadCalls.isEmpty())
+
+        gate.complete(Unit)
+        refreshing.await().getOrThrow()
+        runCurrent()
+
+        assertTrue(row("a")!!.read)
+        assertTrue(api.isRead("a"))
+        assertTrue(db.queueDao().pending().isEmpty())
+        assertEquals(1, db.feedDao().counts().first()["feed/1"])
+        assertEquals(1, engine.displayedCounts().first()["feed/1"])
     }
 
     @Test

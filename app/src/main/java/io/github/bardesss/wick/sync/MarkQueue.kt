@@ -1,5 +1,6 @@
 package io.github.bardesss.wick.sync
 
+import android.util.Log
 import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.ReaderApi
 import io.github.bardesss.wick.api.StreamId
@@ -18,6 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+private const val TAG = "Wick"
 private const val BATCH = 100
 private const val DEBOUNCE_MS = 3_000L
 private const val OP_ATTEMPTS = 3
@@ -33,6 +35,8 @@ class MarkQueue(
     private val itemDao: ItemDao,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Runs the block in one database transaction (the app passes `db.withTransaction`). */
+    private val inTransaction: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
     private val ops = Channel<suspend () -> Unit>(Channel.UNLIMITED)
     private val flushLock = Mutex()
@@ -56,7 +60,10 @@ class MarkQueue(
                         throw e
                     } catch (e: Exception) {
                         // keep the loop alive; retry the same op a few times before dropping it
-                        if (++attempt >= OP_ATTEMPTS) break
+                        if (++attempt >= OP_ATTEMPTS) {
+                            Log.e(TAG, "dropping a read mark after $OP_ATTEMPTS failed attempts", e)
+                            break
+                        }
                         delay(OP_RETRY_MS)
                     }
                 }
@@ -67,23 +74,40 @@ class MarkQueue(
 
     fun mark(id: String, read: Boolean, manual: Boolean) {
         ops.trySend {
-            itemDao.setRead(id, read, manualUnread = manual && !read)
             stateLock.withLock {
-                queueDao.enqueueOrCancel(PendingMarkEntity(id, read, nextStamp()), inFlight = id in inFlight)
+                inTransaction {
+                    itemDao.setRead(id, read, manualUnread = manual && !read)
+                    queueDao.enqueueOrCancel(PendingMarkEntity(id, read, nextStamp()), inFlight = id in inFlight)
+                }
             }
         }
     }
 
     fun markAll(stream: StreamId, feedIds: List<String>?, newestLoadedSec: Long) {
         ops.trySend {
-            itemDao.markReadWhere(feedIds, newestLoadedSec)
-            queueDao.dropUnreadMarksForReadItems()
-            queueDao.enqueueAll(PendingMarkAllEntity(streamRaw = stream.raw, olderThanUsec = newestLoadedSec * 1_000_000))
+            inTransaction {
+                itemDao.markReadWhere(feedIds, newestLoadedSec)
+                queueDao.dropUnreadMarksForReadItems()
+                queueDao.enqueueAll(
+                    PendingMarkAllEntity(streamRaw = stream.raw, olderThanUsec = newestLoadedSec * 1_000_000),
+                )
+            }
         }
     }
 
     /** Sends what is queued. Returns true when nothing is left in the queue. */
-    suspend fun flush(): Boolean = flushLock.withLock {
+    suspend fun flush(): Boolean = flushLock.withLock { flushLocked() }
+
+    /**
+     * Flushes, then runs [block] while no other flush can start. Used to keep a fetch and its
+     * database write from interleaving with a flush that would change what the fetch saw.
+     */
+    suspend fun <T> exclusive(block: suspend () -> T): T = flushLock.withLock {
+        flushLocked()
+        block()
+    }
+
+    private suspend fun flushLocked(): Boolean {
         var clean = true
 
         // Mark-all first, so an item mark made after it still wins on the server.
@@ -96,6 +120,8 @@ class MarkQueue(
                 clean = false
             }
         }
+        // A mark-all that is still queued would be resent later and undo newer item marks.
+        if (!clean) return false
 
         val marks = stateLock.withLock {
             queueDao.pending().also { snapshot -> inFlight.addAll(snapshot.map { it.itemId }) }
@@ -115,7 +141,7 @@ class MarkQueue(
         } finally {
             stateLock.withLock { inFlight.clear() }
         }
-        clean && queueDao.pending().isEmpty() && queueDao.pendingAll().isEmpty()
+        return clean && queueDao.pending().isEmpty() && queueDao.pendingAll().isEmpty()
     }
 
     private fun ApiError.stopsFlush() = this == ApiError.Unreachable || this == ApiError.BadCredentials
@@ -130,7 +156,15 @@ class MarkQueue(
         debounce = scope.launch {
             delay(DEBOUNCE_MS)
             // a new mark must not cancel a flush that is already talking to the server
-            withContext(NonCancellable) { flush() }
+            withContext(NonCancellable) {
+                try {
+                    flush()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "background flush failed", e)
+                }
+            }
         }
     }
 }

@@ -34,36 +34,36 @@ class SyncEngine(
      * Flushes the queue, fetches [view] and replaces the local copy. Returns the ids of the
      * new snapshot in server order. On failure the database is left as it was.
      */
-    suspend fun refresh(view: StreamId, oldestFirst: Boolean): Result<List<String>> {
-        queue.flush()
-        val fetched = try {
-            fetch(view, oldestFirst)
-        } catch (e: ApiError) {
-            return Result.failure(e)
-        }
-        val ids = fetched.items.map { it.id }
-        db.withTransaction {
-            store(fetched)
-            if (fetched.complete) {
-                db.itemDao().markMissingRead(feedIdsOf(view, fetched.feeds), ids.toSet())
+    suspend fun refresh(view: StreamId, oldestFirst: Boolean): Result<List<String>> =
+        queue.exclusive {
+            val fetched = try {
+                fetch(view, oldestFirst)
+            } catch (e: ApiError) {
+                return@exclusive Result.failure(e)
             }
-            db.itemDao().clearManualUnread()
-            db.itemDao().pruneReadNotIn(ids.toSet())
+            val ids = fetched.items.map { it.id }
+            db.withTransaction {
+                store(fetched)
+                if (fetched.complete) {
+                    db.itemDao().markMissingRead(feedIdsOf(view, fetched.feeds), ids.toSet())
+                }
+                db.itemDao().clearManualUnread()
+                db.itemDao().pruneReadNotIn(ids.toSet())
+            }
+            Result.success(ids)
         }
-        return Result.success(ids)
-    }
 
     /** Like [refresh] for the whole account, but it only adds and updates rows. */
-    suspend fun backgroundSync(): Result<Unit> {
-        queue.flush()
-        val fetched = try {
-            fetch(StreamId.All, oldestFirst = false)
-        } catch (e: ApiError) {
-            return Result.failure(e)
+    suspend fun backgroundSync(): Result<Unit> =
+        queue.exclusive {
+            val fetched = try {
+                fetch(StreamId.All, oldestFirst = false)
+            } catch (e: ApiError) {
+                return@exclusive Result.failure(e)
+            }
+            db.withTransaction { store(fetched) }
+            Result.success(Unit)
         }
-        db.withTransaction { store(fetched) }
-        return Result.success(Unit)
-    }
 
     /**
      * Unread counts by raw stream id. A feed shows the server count minus pending read marks

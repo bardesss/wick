@@ -1,13 +1,16 @@
 package io.github.bardesss.wick
 
 import android.content.Context
+import android.util.Log
 import androidx.room.Room
+import androidx.room.withTransaction
 import io.github.bardesss.wick.api.Auth
 import io.github.bardesss.wick.api.GReaderApi
 import io.github.bardesss.wick.api.ReaderApi
 import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,9 +28,13 @@ class AppContainer(val context: Context) {
     @Volatile
     var auth: Auth? = null
 
-    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val appScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO +
+            CoroutineExceptionHandler { _, e -> Log.e("Wick", "uncaught error in app scope", e) },
+    )
 
     val api: ReaderApi by lazy { GReaderApi(OkHttpClient()) { auth } }
-    val markQueue: MarkQueue by lazy { MarkQueue(api, queueDao, itemDao, appScope) }
+    val markQueue: MarkQueue by lazy { MarkQueue(api, queueDao, itemDao, appScope, inTransaction = { block -> db.withTransaction { block() } })
+    }
     val syncEngine: SyncEngine by lazy { SyncEngine(api, db, markQueue) }
 }
