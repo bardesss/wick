@@ -17,6 +17,17 @@ private val WickColorScheme = darkColorScheme(
     onSurface = WickColors.Paper,
     surfaceVariant = WickColors.Raised,
     onSurfaceVariant = WickColors.Meta,
+    // sheets, menus and snackbars pick these; keep them all on raised with no purple tint
+    surfaceTint = WickColors.Raised,
+    surfaceContainerLowest = WickColors.Raised,
+    surfaceContainerLow = WickColors.Raised,
+    surfaceContainer = WickColors.Raised,
+    surfaceContainerHigh = WickColors.Raised,
+    surfaceContainerHighest = WickColors.Raised,
+    surfaceBright = WickColors.Raised,
+    surfaceDim = WickColors.Night,
+    inverseSurface = WickColors.Raised,
+    inverseOnSurface = WickColors.Paper,
     outline = WickColors.Meta,
     outlineVariant = WickColors.Line,
 )

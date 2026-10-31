@@ -2,6 +2,7 @@ package io.github.bardesss.wick.ui.list
 
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.createSavedStateHandle
@@ -18,6 +19,7 @@ import io.github.bardesss.wick.db.ItemDao
 import io.github.bardesss.wick.db.LocalState
 import io.github.bardesss.wick.db.SnapshotDao
 import io.github.bardesss.wick.db.SnapshotRow
+import io.github.bardesss.wick.html.htmlToAnnotated
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.ui.login.LoginMessages
@@ -27,6 +29,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +43,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** What a row shows apart from its read state, which changes on its own (see [ListViewModel.read]). */
 @Immutable
@@ -198,6 +202,12 @@ class ListViewModel(
     fun toggleRead(id: String) {
         if (id in read.value) queue.mark(id, read = false, manual = true) else queue.mark(id, read = true, manual = false)
     }
+
+    /** Whether ticks are on; the screen follows it in its [io.github.bardesss.wick.ui.Haptics]. */
+    val haptics: Flow<Boolean> get() = settings.haptics
+
+    /** The feed's text for the sheet, read and converted off the main thread. Null when it sent none. */
+    suspend fun sheetText(id: String): AnnotatedString? = withContext(work) { htmlToAnnotated(itemDao.htmlOf(id)) }
 
     fun onBackground() {
         backgroundedAt = clock()

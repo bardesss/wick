@@ -78,6 +78,9 @@ abstract class ItemDao {
     @Query("UPDATE ItemEntity SET manualUnread = 0 WHERE manualUnread = 1")
     abstract suspend fun clearManualUnread()
 
+    @Query("SELECT html FROM ItemEntity WHERE id = :id")
+    abstract suspend fun htmlOf(id: String): String?
+
     suspend fun feedIdsOf(ids: List<String>): Map<String, String> =
         ids.chunked(CHUNK).flatMap { feedIdsChunk(it) }.associate { it.id to it.feedId }
 

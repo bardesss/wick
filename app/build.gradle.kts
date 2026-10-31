@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.browser)
+    implementation(libs.jsoup)
 
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)

@@ -1,14 +1,10 @@
 package io.github.bardesss.wick.ui.list
 
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
-import androidx.browser.customtabs.CustomTabColorSchemeParams
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -24,11 +21,15 @@ import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -38,34 +39,44 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
+import io.github.bardesss.wick.ui.openLink
+import io.github.bardesss.wick.ui.rememberHaptics
+import io.github.bardesss.wick.ui.rememberReducedMotion
+import io.github.bardesss.wick.ui.sheet.SheetBody
+import io.github.bardesss.wick.ui.sheet.SummarySheet
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 private val CountStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 14.sp, fontFeatureSettings = "tnum")
 private val NoteStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
+private val ToastStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.5.sp)
+private val ToastShape = RoundedCornerShape(12.dp)
 private const val FOOTER_KEY = 0
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
     val context = LocalContext.current
@@ -97,6 +108,25 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
         shownIds = ids
     }
 
+    val haptics = rememberHaptics(vm.haptics)
+    val reducedMotion by rememberReducedMotion()
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    val toast = remember { arrayOfNulls<Job>(1) }
+    val markedRead = stringResource(R.string.list_marked_read)
+    val markedUnread = stringResource(R.string.list_marked_unread)
+    var sheetId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val open = remember(vm, context) {
+        { row: RowModel ->
+            row.url?.let { url ->
+                openLink(context, url)
+                vm.open(row.id)
+            }
+            Unit
+        }
+    }
+
     ListContent(
         viewName = name ?: stringResource(R.string.list_all_unread),
         count = count,
@@ -108,14 +138,39 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
         listState = listState,
         onRefresh = vm::refresh,
         onOpenPicker = onOpenPicker,
-        onOpen = { row ->
-            row.url?.let { url ->
-                openLink(context, url)
-                vm.open(row.id)
-            }
-        },
+        onOpen = open,
         onFrame = vm::onVisible,
+        onShowText = { row -> sheetId = row.id },
+        onToggle = { row ->
+            val nowRead = row.id !in read.value
+            vm.toggleRead(row.id)
+            // a new note replaces the one showing at once
+            toast[0]?.cancel()
+            toast[0] = scope.launch { snackbar.showSnackbar(if (nowRead) markedRead else markedUnread) }
+        },
+        onSwipeTick = haptics::tick,
+        reducedMotion = reducedMotion,
+        snackbar = snackbar,
     )
+
+    val sheetRow = sheetId?.let { id -> rows?.firstOrNull { it.id == id } }
+    if (sheetRow != null) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val body by produceState<SheetBody>(SheetBody.Loading, sheetRow.id) {
+            value = SheetBody.Ready(vm.sheetText(sheetRow.id))
+        }
+        SummarySheet(
+            row = sheetRow,
+            body = body,
+            nowSec = nowSec,
+            sheetState = sheetState,
+            onOpen = {
+                open(sheetRow)
+                scope.launch { sheetState.hide() }.invokeOnCompletion { sheetId = null }
+            },
+            onDismiss = { sheetId = null },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -134,6 +189,13 @@ fun ListContent(
     onOpenPicker: () -> Unit,
     onOpen: (RowModel) -> Unit,
     onFrame: (ListFrame) -> Boolean,
+    onShowText: (RowModel) -> Unit = {},
+    onToggle: (RowModel) -> Unit = {},
+    onSwipeTick: () -> Unit = {},
+    reducedMotion: Boolean = false,
+    snackbar: SnackbarHostState = remember { SnackbarHostState() },
+    /** Fixed sideways offsets in px by row id, for previews. */
+    swipePreview: Map<String, Float> = emptyMap(),
 ) {
     val frameSink by rememberUpdatedState(onFrame)
     LaunchedEffect(listState) {
@@ -144,73 +206,108 @@ fun ListContent(
             } while (more)
         }
     }
+    val lock = remember { SwipeLock() }
 
-    Column(Modifier.fillMaxSize().background(WickColors.Night)) {
-        Header(viewName, count, onOpenPicker)
-        if (message != null) {
-            Text(
-                message,
-                style = NoteStyle,
-                color = WickColors.Meta,
-                modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 8.dp),
-            )
-        }
-        val pull = rememberPullToRefreshState()
-        PullToRefreshBox(
-            isRefreshing = refreshing,
-            onRefresh = onRefresh,
-            state = pull,
-            modifier = Modifier.fillMaxSize(),
-            indicator = {
-                PullToRefreshDefaults.Indicator(
-                    state = pull,
-                    isRefreshing = refreshing,
-                    containerColor = WickColors.Raised,
-                    color = WickColors.Amber,
-                    modifier = Modifier.align(Alignment.TopCenter),
+    Box(Modifier.fillMaxSize().background(WickColors.Night)) {
+        Column(Modifier.fillMaxSize()) {
+            Header(viewName, count, animate = !reducedMotion, onOpenPicker)
+            if (message != null) {
+                Text(
+                    message,
+                    style = NoteStyle,
+                    color = WickColors.Meta,
+                    modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 8.dp),
                 )
-            },
-        ) {
-            // laying out an empty list before the rows arrive would reset a restored scroll position
-            if (rows != null) BoxWithConstraints(Modifier.fillMaxSize()) {
-                val footerHeight = maxHeight
-                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(rows, key = { _, row -> row.id }, contentType = { _, _ -> "item" }) { index, row ->
-                        val isRead by remember(row.id) { derivedStateOf { row.id in read.value } }
-                        ItemRow(
-                            row = row,
-                            read = isRead,
-                            nowSec = nowSec,
-                            divider = index > 0,
-                            onClick = { onOpen(row) },
-                        )
-                    }
-                    item(key = FOOTER_KEY, contentType = "caught_up") {
-                        CaughtUp(Modifier.height(footerHeight))
+            }
+            val pull = rememberPullToRefreshState()
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = onRefresh,
+                state = pull,
+                modifier = Modifier.fillMaxSize(),
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = pull,
+                        isRefreshing = refreshing,
+                        containerColor = WickColors.Raised,
+                        color = WickColors.Amber,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                    )
+                },
+            ) {
+                // laying out an empty list before the rows arrive would reset a restored scroll position
+                if (rows != null) BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val footerHeight = maxHeight
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                        itemsIndexed(rows, key = { _, row -> row.id }, contentType = { _, _ -> "item" }) { index, row ->
+                            val isRead by remember(row.id) { derivedStateOf { row.id in read.value } }
+                            SwipeRow(
+                                id = row.id,
+                                lock = lock,
+                                reducedMotion = reducedMotion,
+                                onThreshold = onSwipeTick,
+                                onSwipe = { outcome ->
+                                    when (outcome) {
+                                        SwipeOutcome.OpenSheet -> onShowText(row)
+                                        SwipeOutcome.ToggleRead -> onToggle(row)
+                                        SwipeOutcome.None -> Unit
+                                    }
+                                },
+                                startOffsetPx = swipePreview[row.id] ?: 0f,
+                            ) { moved ->
+                                ItemRow(
+                                    row = row,
+                                    read = isRead,
+                                    nowSec = nowSec,
+                                    divider = index > 0,
+                                    onClick = { onOpen(row) },
+                                    modifier = moved,
+                                )
+                            }
+                        }
+                        item(key = FOOTER_KEY, contentType = "caught_up") {
+                            CaughtUp(Modifier.height(footerHeight))
+                        }
                     }
                 }
             }
+        }
+        SnackbarHost(
+            snackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 28.dp),
+        ) { data ->
+            Text(
+                data.visuals.message,
+                style = ToastStyle,
+                color = WickColors.Paper,
+                modifier = Modifier
+                    .background(WickColors.Raised, ToastShape)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            )
         }
     }
 }
 
 @Composable
-private fun Header(name: String, count: Int, onClick: () -> Unit) {
+private fun Header(name: String, count: Int, animate: Boolean, onClick: () -> Unit) {
     var tick by remember { mutableStateOf(false) }
     var shown by remember { mutableIntStateOf(count) }
     LaunchedEffect(count) {
         if (count != shown) {
             shown = count
+            // no flash when the system has animations off
+            if (!animate) return@LaunchedEffect
             tick = true
             delay(350)
             tick = false
         }
     }
-    val countColor by animateColorAsState(
-        if (tick) WickColors.Amber else WickColors.Meta,
-        tween(300),
-        label = "count",
-    )
+    val target = if (tick) WickColors.Amber else WickColors.Meta
+    val animated by animateColorAsState(target, tween(300), label = "count")
+    val countColor = if (animate) animated else target
     Row(
         Modifier
             .fillMaxWidth()
@@ -238,26 +335,4 @@ private fun LazyListLayoutInfo.toFrame(nowMs: Long): ListFrame {
         items += FrameItem(id, info.index, info.offset, info.size)
     }
     return ListFrame(nowMs, viewportStartOffset, viewportEndOffset, items)
-}
-
-private fun openLink(context: Context, url: String) {
-    val uri = url.toUri()
-    val colors = CustomTabColorSchemeParams.Builder()
-        .setToolbarColor(WickColors.Night.toArgb())
-        .setNavigationBarColor(WickColors.Night.toArgb())
-        .build()
-    try {
-        CustomTabsIntent.Builder()
-            .setDefaultColorSchemeParams(colors)
-            .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
-            .setShowTitle(true)
-            .build()
-            .launchUrl(context, uri)
-    } catch (e: ActivityNotFoundException) {
-        try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-        } catch (e: ActivityNotFoundException) {
-            // nothing on the device can open it
-        }
-    }
 }

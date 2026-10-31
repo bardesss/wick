@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
@@ -50,7 +51,13 @@ private val LetterStyle = TextStyle(
 
 /** The feed icon, or the first letter of the feed on a tile while it loads or when there is none. */
 @Composable
-fun Favicon(url: String?, title: String, faded: Boolean, modifier: Modifier = Modifier) {
+fun Favicon(
+    url: String?,
+    title: String,
+    faded: Boolean,
+    modifier: Modifier = Modifier,
+    tile: Color = WickColors.Raised,
+) {
     var loaded by remember(url) { mutableStateOf(false) }
     Box(
         modifier
@@ -60,7 +67,7 @@ fun Favicon(url: String?, title: String, faded: Boolean, modifier: Modifier = Mo
         contentAlignment = Alignment.Center,
     ) {
         if (!loaded) {
-            Box(Modifier.size(20.dp).background(WickColors.Raised), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(20.dp).background(tile), contentAlignment = Alignment.Center) {
                 Text(title.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "", style = LetterStyle)
             }
         }
