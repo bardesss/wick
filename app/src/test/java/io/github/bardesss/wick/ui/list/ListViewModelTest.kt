@@ -504,4 +504,18 @@ class ListViewModelTest {
         )
         assertEquals(StreamId.Folder("News"), vm.view.value)
     }
+
+    @Test
+    fun stale_view_from_another_account_falls_back_to_all() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = ListViewModel(
+            savedState = SavedStateHandle(), itemDao = db.itemDao(), feedDao = db.feedDao(), snapshotDao = db.snapshotDao(),
+            sync = sync, queue = queue, settings = settings, creds = creds, appScope = backgroundScope,
+            initialView = StreamId.Folder("Other account folder").raw, clock = { now }, work = main,
+        )
+
+        assertEquals(StreamId.All, settle(vm.view) { it == StreamId.All })
+        assertEquals(listOf("b", "a"), ids(vm, listOf("b", "a")))
+    }
 }

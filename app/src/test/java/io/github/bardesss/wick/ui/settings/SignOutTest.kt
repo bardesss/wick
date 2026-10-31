@@ -39,6 +39,7 @@ class SignOutTest {
     }
 
     private lateinit var db: WickDb
+    private val settings = SettingsStore(MemoryPreferences())
     private val api = FakeReaderApi()
     private val creds = MemoryCreds(Auth("https://feeds.example.com", "tok"))
 
@@ -67,7 +68,7 @@ class SignOutTest {
         queue.awaitApplied()
         var imagesCleared = false
 
-        signOut(queue, creds, wipe = { wipeAccount(queue, db) { imagesCleared = true } })
+        signOut(queue, creds, wipe = { wipeAccount(queue, db, settings) { imagesCleared = true } })
 
         // the queued mark was sent before anything was wiped
         assertEquals(listOf(listOf("a") to true), api.setReadCalls)
@@ -90,7 +91,7 @@ class SignOutTest {
         api.beforeSetRead = { awaitCancellation() }
         var imagesCleared = false
 
-        signOut(queue, creds, wipe = { wipeAccount(queue, db) { imagesCleared = true } })
+        signOut(queue, creds, wipe = { wipeAccount(queue, db, settings) { imagesCleared = true } })
 
         assertNull(creds.auth())
         assertTrue(db.feedDao().feedsNow().isEmpty())
@@ -100,9 +101,8 @@ class SignOutTest {
     @Test
     fun same_account_after_401_keeps_pending_marks() = runTest(timeout = 30.seconds) {
         seed()
-        val settings = SettingsStore(MemoryPreferences())
         val queue = db.newQueue(api, backgroundScope)
-        val switch = AccountSwitch(settings) { wipeAccount(queue, db) {} }
+        val switch = AccountSwitch(settings) { wipeAccount(queue, db, settings) {} }
         switch.enter("https://feeds.example.com\nme")
         queue.mark("a", read = true, manual = false)
         queue.awaitApplied()
@@ -118,10 +118,9 @@ class SignOutTest {
     @Test
     fun different_account_wipes_previous_data() = runTest(timeout = 30.seconds) {
         seed()
-        val settings = SettingsStore(MemoryPreferences())
         val queue = db.newQueue(api, backgroundScope)
         var imagesCleared = false
-        val switch = AccountSwitch(settings) { wipeAccount(queue, db) { imagesCleared = true } }
+        val switch = AccountSwitch(settings) { wipeAccount(queue, db, settings) { imagesCleared = true } }
         switch.enter("https://feeds.example.com\nme")
         queue.mark("a", read = true, manual = false)
         queue.awaitApplied()
@@ -133,5 +132,25 @@ class SignOutTest {
         assertTrue(db.itemDao().byIds(listOf("a")).first().isEmpty())
         assertTrue(imagesCleared)
         assertEquals("https://feeds.example.com\nsomeone", settings.account())
+    }
+
+    @Test
+    fun wipe_resets_the_last_view_for_the_next_account() = runTest(timeout = 30.seconds) {
+        seed()
+        val queue = db.newQueue(api, backgroundScope)
+        settings.setLastView("feed/1")
+
+        wipeAccount(queue, db, settings) {}
+
+        assertNull(settings.lastView())
+    }
+
+    @Test
+    fun sign_out_clears_credentials_even_when_the_wipe_fails() = runTest(timeout = 30.seconds) {
+        val queue = db.newQueue(api, backgroundScope)
+
+        signOut(queue, creds, wipe = { error("disk full") })
+
+        assertNull(creds.auth())
     }
 }

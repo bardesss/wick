@@ -7,6 +7,7 @@ import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.MarkQueue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -16,13 +17,15 @@ private const val TAG = "Wick"
  * Empties the local copy of an account: every table and the cached images. Runs with no sync
  * or flush in progress, after the queue has applied what it was given.
  */
-suspend fun wipeAccount(queue: MarkQueue, db: WickDb, clearImages: () -> Unit) {
+suspend fun wipeAccount(queue: MarkQueue, db: WickDb, settings: SettingsStore, clearImages: () -> Unit) {
     queue.quiesced {
         queue.awaitApplied()
         withContext(Dispatchers.IO) {
             db.clearAllTables()
             clearImages()
         }
+        // the next account must not open on this one's folder or feed
+        settings.setLastView(null)
     }
     // an operation that was still on its way must not land in the fresh database
     queue.awaitApplied()
@@ -49,9 +52,17 @@ suspend fun signOut(
     } catch (e: Exception) {
         Log.w(TAG, "could not send the queue before signing out", e)
     }
-    wipe()
-    forgetAccount()
-    creds.clear()
+    try {
+        wipe()
+        forgetAccount()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.e(TAG, "could not clear the local data while signing out", e)
+    } finally {
+        // the credentials go even when the rest failed, and even when this was cancelled
+        withContext(NonCancellable) { creds.clear() }
+    }
 }
 
 /**

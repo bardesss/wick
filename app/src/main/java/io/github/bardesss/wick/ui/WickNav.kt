@@ -37,7 +37,7 @@ fun WickNav(container: AppContainer) {
     val auth by container.creds.authFlow.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     // the list is gone while the account is wiped, so nothing can write to the database meanwhile
-    var signingOut by remember { mutableStateOf(false) }
+    var signingOut by rememberSaveable { mutableStateOf(false) }
     val session: SessionScope = viewModel { SessionScope(createSavedStateHandle()) }
     // view models for the signed in session are created from the activity's extras, so their
     // saved state lives with the activity while the session store decides how long they live
@@ -84,7 +84,7 @@ fun WickNav(container: AppContainer) {
                                 signOut(
                                     container.markQueue,
                                     container.creds,
-                                    wipe = { wipeAccount(container.markQueue, container.db, container::clearImages) },
+                                    wipe = { wipeAccount(container.markQueue, container.db, container.settings, container::clearImages) },
                                     forgetAccount = { container.settings.setAccount(null) },
                                 )
                             } finally {

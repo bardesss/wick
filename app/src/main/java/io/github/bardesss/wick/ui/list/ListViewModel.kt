@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -163,6 +164,18 @@ class ListViewModel(
 
     init {
         savedState[KEY_VIEW] = _view.value.raw
+        // a view that is not in the account (a stale cached one) falls back to All once feeds are known
+        viewModelScope.launch {
+            feedDao.all().filter { it.isNotEmpty() }.collect { feeds ->
+                val v = _view.value
+                val missing = when (v) {
+                    StreamId.All -> false
+                    is StreamId.Folder -> feeds.none { it.folder == v.name }
+                    is StreamId.Feed -> feeds.none { it.id == v.id }
+                }
+                if (missing) select(StreamId.All)
+            }
+        }
         viewModelScope.launch {
             // a fresh start shows the view the stored list belongs to
             if (!restored) {
@@ -364,7 +377,7 @@ class ListViewModel(
                     settings = c.settings,
                     creds = c.creds,
                     appScope = c.appScope,
-                    initialView = c.startView,
+                    initialView = c.startView(),
                 )
             }
         }

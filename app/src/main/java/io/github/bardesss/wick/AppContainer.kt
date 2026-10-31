@@ -54,11 +54,11 @@ class AppContainer(val context: Context) {
     val syncEngine: SyncEngine by lazy { SyncEngine(api, db, markQueue) }
 
     val accountSwitch: AccountSwitch by lazy {
-        AccountSwitch(settings) { wipeAccount(markQueue, db, ::clearImages) }
+        AccountSwitch(settings) { wipeAccount(markQueue, db, settings, ::clearImages) }
     }
 
-    /** The view shown last time, read once so the first frame can have the right header. */
-    val startView: String? by lazy { runBlocking { settings.lastView() } }
+    /** The view shown last time, read for each session so the first frame can have the right header. */
+    fun startView(): String? = runBlocking { settings.lastView() }
 
     val imageLoader: ImageLoader by lazy {
         // shares the connection pool with the API client, but only favicon requests get the key

@@ -41,8 +41,8 @@ class SettingsStore(private val store: DataStore<Preferences>) {
     /** The raw stream id of the view shown last, so a start can draw the right header at once. */
     suspend fun lastView(): String? = store.data.first()[lastViewKey]
 
-    suspend fun setLastView(raw: String) {
-        store.edit { it[lastViewKey] = raw }
+    suspend fun setLastView(raw: String?) {
+        store.edit { if (raw == null) it.remove(lastViewKey) else it[lastViewKey] = raw }
     }
 
     companion object {
