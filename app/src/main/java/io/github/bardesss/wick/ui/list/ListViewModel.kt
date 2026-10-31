@@ -266,17 +266,9 @@ class ListViewModel(
     /** The feed's text for the sheet, read and converted off the main thread. Null when it sent none. */
     suspend fun sheetText(id: String): AnnotatedString? = withContext(work) { htmlToAnnotated(itemDao.htmlOf(id)) }
 
+    /** Queued marks are sent by the flush job the app enqueues when it stops. */
     fun onBackground() {
         backgroundedAt = clock()
-        appScope.launch {
-            try {
-                queue.flush()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // the queue keeps the marks and sends them later
-            }
-        }
     }
 
     fun onForeground() {
