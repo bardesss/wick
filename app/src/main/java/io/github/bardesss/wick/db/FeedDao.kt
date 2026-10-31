@@ -28,6 +28,9 @@ abstract class FeedDao {
     @Query("SELECT * FROM FeedEntity ORDER BY title COLLATE NOCASE")
     abstract fun all(): Flow<List<FeedEntity>>
 
+    @Query("SELECT * FROM FeedEntity")
+    abstract suspend fun feedsNow(): List<FeedEntity>
+
     fun counts(): Flow<Map<String, Int>> =
         countRows().map { rows -> rows.associate { it.streamId to it.count } }
 

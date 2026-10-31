@@ -212,6 +212,29 @@ class GReaderApiTest {
     }
 
     @Test
+    fun non_json_200_body_is_Malformed() {
+        server.enqueue(MockResponse().setBody("<html>proxy login</html>"))
+        expectError(ApiError.Malformed) { api.feeds() }
+        server.enqueue(MockResponse().setBody("not json"))
+        expectError(ApiError.Malformed) { api.unread(StreamId.All, false, 10, null) }
+    }
+
+    @Test
+    fun unauthorized_on_authenticated_calls_is_BadCredentials() {
+        server.enqueue(MockResponse().setResponseCode(401))
+        expectError(ApiError.BadCredentials) { api.feeds() }
+        // token fetch
+        server.enqueue(MockResponse().setResponseCode(401))
+        expectError(ApiError.BadCredentials) { api.setRead(listOf("a"), true) }
+        // POST rejected again after the one token retry
+        server.enqueue(MockResponse().setBody("t1"))
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(MockResponse().setBody("t2"))
+        server.enqueue(MockResponse().setResponseCode(401))
+        expectError(ApiError.BadCredentials) { api.setRead(listOf("a"), true) }
+    }
+
+    @Test
     fun markAllRead_sends_stream_and_ts_usec() {
         server.enqueue(MockResponse().setBody("tok"))
         server.enqueue(MockResponse().setBody("OK"))

@@ -26,6 +26,12 @@ class StreamIdTest {
     }
 
     @Test
+    fun parse_round_trips_raw() {
+        val all = listOf(StreamId.All, StreamId.Folder("Tech & Co/Ä"), StreamId.Folder("a"), StreamId.Feed("feed/12"))
+        all.forEach { assertEquals(it, StreamId.parse(it.raw)) }
+    }
+
+    @Test
     fun entities_decode() {
         assertEquals("A & B", decodeEntities("A &amp; B"))
         assertEquals("it's \"x\" <y>", decodeEntities("it&#39;s &quot;x&quot; &lt;y&gt;"))

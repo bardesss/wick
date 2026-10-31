@@ -2,6 +2,7 @@ package io.github.bardesss.wick.api
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -40,7 +41,7 @@ class GReaderApi(
 
     override suspend fun feeds(): List<Feed> {
         val text = get("subscription/list") { addQueryParameter("output", "json") }
-        return json.decodeFromString<SubscriptionListDto>(text).subscriptions.map {
+        return decode<SubscriptionListDto>(text).subscriptions.map {
             Feed(
                 id = it.id,
                 title = decodeEntities(it.title),
@@ -53,7 +54,7 @@ class GReaderApi(
 
     override suspend fun unreadCounts(): List<UnreadCount> {
         val text = get("unread-count") { addQueryParameter("output", "json") }
-        return json.decodeFromString<UnreadCountsDto>(text).unreadcounts
+        return decode<UnreadCountsDto>(text).unreadcounts
             .map { UnreadCount(it.id, it.count.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()) }
     }
 
@@ -70,7 +71,7 @@ class GReaderApi(
             if (oldestFirst) addQueryParameter("r", "o")
             if (continuation != null) addQueryParameter("c", continuation)
         }
-        val dto = json.decodeFromString<StreamContentsDto>(text)
+        val dto = decode<StreamContentsDto>(text)
         return Page(dto.items.map { it.toItem() }, dto.continuation?.takeIf { it.isNotEmpty() })
     }
 
@@ -94,6 +95,15 @@ class GReaderApi(
                 .build()
         }
     }
+
+    private inline fun <reified T> decode(text: String): T =
+        try {
+            json.decodeFromString<T>(text)
+        } catch (e: SerializationException) {
+            throw ApiError.Malformed
+        } catch (e: IllegalArgumentException) {
+            throw ApiError.Malformed
+        }
 
     private fun currentAuth(): Auth = auth() ?: throw ApiError.BadCredentials
 
@@ -139,8 +149,8 @@ class GReaderApi(
             try {
                 execute(request)
                 return
-            } catch (e: ApiError.Http) {
-                if (e.code == 401 && !retried) {
+            } catch (e: ApiError.BadCredentials) {
+                if (!retried) {
                     retried = true
                     editToken = null
                 } else {
@@ -154,7 +164,9 @@ class GReaderApi(
         withContext(Dispatchers.IO) {
             try {
                 client.newCall(request).execute().use { r ->
-                    if (!r.isSuccessful) throw (map(r.code) ?: ApiError.Http(r.code))
+                    if (!r.isSuccessful) {
+                        throw (map(r.code) ?: if (r.code == 401) ApiError.BadCredentials else ApiError.Http(r.code))
+                    }
                     r.body?.string().orEmpty()
                 }
             } catch (e: IOException) {
