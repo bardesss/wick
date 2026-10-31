@@ -120,6 +120,18 @@ class LoginViewModelTest {
     }
 
     @Test
+    fun unusable_address_has_its_own_message() {
+        val badUrl = object : ReaderApi by api {
+            override suspend fun login(server: String, user: String, apiKey: String): String =
+                throw IllegalArgumentException("bad url")
+        }
+        val vm = LoginViewModel(badUrl, creds)
+        vm.signIn("exa mple.com", "me", "key")
+        assertEquals("That server address doesn't look right", vm.state.value.error)
+        assertFalse(vm.state.value.busy)
+    }
+
+    @Test
     fun auth_to_string_hides_token() {
         val s = Auth("https://a.b", "secret-token").toString()
         assertEquals("Auth(server=https://a.b, token=***)", s)

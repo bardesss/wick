@@ -21,6 +21,7 @@ object LoginMessages {
     const val BAD_CREDENTIALS = "Username or API key is wrong"
     const val NO_API = "No Google Reader API at this address"
     const val STORAGE = "Couldn't store the sign in on this device"
+    const val BAD_ADDRESS = "That server address doesn't look right"
     fun http(code: Int) = "The server answered with error $code"
 }
 
@@ -51,14 +52,22 @@ class LoginViewModel(
         _state.value = LoginState(busy = true)
         val base = normaliseServer(server)
         viewModelScope.launch {
-            try {
-                val token = api.login(base, user.trim(), key.trim())
-                creds.save(Auth(base, token))
-                _state.update { it.copy(busy = false) }
+            val token = try {
+                api.login(base, user.trim(), key.trim())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
                 _state.value = LoginState(error = message(e))
+                return@launch
+            } catch (e: Exception) {
+                _state.value = LoginState(error = LoginMessages.BAD_ADDRESS)
+                return@launch
+            }
+            try {
+                creds.save(Auth(base, token))
+                _state.update { it.copy(busy = false) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _state.value = LoginState(error = LoginMessages.STORAGE)
             }

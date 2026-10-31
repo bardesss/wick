@@ -76,17 +76,24 @@ fun LoginContent(state: LoginState, onSignIn: (String, String, String) -> Unit) 
         Spacer(Modifier.height(56.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            LoginField(
-                value = server,
-                onValueChange = { server = it },
-                label = stringResource(R.string.login_server),
-                keyboardOptions = KeyboardOptions(
-                    autoCorrectEnabled = false,
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Next,
-                ),
-                keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LoginField(
+                    value = server,
+                    onValueChange = { server = it },
+                    label = stringResource(R.string.login_server),
+                    keyboardOptions = KeyboardOptions(
+                        autoCorrectEnabled = false,
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Next,
+                    ),
+                    keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
+                )
+                Text(
+                    text = stringResource(R.string.login_server_hint),
+                    style = WickText.Meta,
+                    color = WickColors.Meta,
+                )
+            }
             LoginField(
                 value = user,
                 onValueChange = { user = it },
