@@ -58,9 +58,11 @@ abstract class ItemDao {
     )
     protected abstract suspend fun unreadIn(feedIds: List<String>, oldestFirst: Boolean): List<String>
 
+    // rows in the list snapshot stay until the snapshot is replaced
     @Query(
         "SELECT id FROM ItemEntity WHERE read = 1 " +
-            "AND id NOT IN (SELECT itemId FROM PendingMarkEntity)",
+            "AND id NOT IN (SELECT itemId FROM PendingMarkEntity) " +
+            "AND id NOT IN (SELECT itemId FROM SnapshotEntity)",
     )
     protected abstract suspend fun prunable(): List<String>
 

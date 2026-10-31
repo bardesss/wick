@@ -23,6 +23,13 @@ object LoginMessages {
     const val STORAGE = "Couldn't store the sign in on this device"
     const val BAD_ADDRESS = "That server address doesn't look right"
     fun http(code: Int) = "The server answered with error $code"
+
+    fun of(e: ApiError) = when (e) {
+        ApiError.Unreachable -> UNREACHABLE
+        ApiError.BadCredentials -> BAD_CREDENTIALS
+        ApiError.NoGReaderApi, ApiError.Malformed -> NO_API
+        is ApiError.Http -> http(e.code)
+    }
 }
 
 private val scheme = Regex("^[A-Za-z][A-Za-z0-9+.-]*://")
@@ -57,7 +64,7 @@ class LoginViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
-                _state.value = LoginState(error = message(e))
+                _state.value = LoginState(error = LoginMessages.of(e))
                 return@launch
             } catch (e: Exception) {
                 _state.value = LoginState(error = LoginMessages.BAD_ADDRESS)
@@ -72,13 +79,6 @@ class LoginViewModel(
                 _state.value = LoginState(error = LoginMessages.STORAGE)
             }
         }
-    }
-
-    private fun message(e: ApiError) = when (e) {
-        ApiError.Unreachable -> LoginMessages.UNREACHABLE
-        ApiError.BadCredentials -> LoginMessages.BAD_CREDENTIALS
-        ApiError.NoGReaderApi, ApiError.Malformed -> LoginMessages.NO_API
-        is ApiError.Http -> LoginMessages.http(e.code)
     }
 
     companion object {
