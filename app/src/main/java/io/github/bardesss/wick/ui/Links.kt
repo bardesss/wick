@@ -9,8 +9,13 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.core.net.toUri
 import io.github.bardesss.wick.ui.theme.WickColors
 
-/** Opens [url] in a Custom Tab of the default browser, or any app that takes it. */
+/** True for http and https links, the only ones a feed may open. */
+fun isWebUrl(url: String): Boolean =
+    url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+
+/** Opens [url] in a Custom Tab of the default browser, or any app that takes it. Other schemes are ignored. */
 fun openLink(context: Context, url: String) {
+    if (!isWebUrl(url)) return
     val uri = url.toUri()
     val colors = CustomTabColorSchemeParams.Builder()
         .setToolbarColor(WickColors.Night.toArgb())
