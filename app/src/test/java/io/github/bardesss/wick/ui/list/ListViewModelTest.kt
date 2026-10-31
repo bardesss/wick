@@ -424,7 +424,7 @@ class ListViewModelTest {
         vm.markAllRead()
 
         assertEquals(listOf("d"), ids(vm, listOf("d")))
-        assertEquals(listOf(StreamId.Folder("News").raw to 200_000_000L), api.markAllCalls)
+        assertEquals(listOf(StreamId.Folder("News").raw to 201_000_000L), api.markAllCalls)
         assertTrue(api.isRead("a") && api.isRead("b"))
         assertFalse(api.isRead("c") || api.isRead("d"))
         val c = db.itemDao().byIds(listOf("c")).first().single()

@@ -84,13 +84,15 @@ class MarkQueue(
         }
     }
 
+    // The server marks only items strictly older than the cutoff, in whole seconds, so ask for
+    // the start of the next second to include items published at newestLoadedSec.
     fun markAll(stream: StreamId, feedIds: List<String>?, newestLoadedSec: Long) {
         ops.trySend {
             inTransaction {
                 itemDao.markReadWhere(feedIds, newestLoadedSec)
                 queueDao.dropUnreadMarksForReadItems()
                 queueDao.enqueueAll(
-                    PendingMarkAllEntity(streamRaw = stream.raw, olderThanUsec = newestLoadedSec * 1_000_000),
+                    PendingMarkAllEntity(streamRaw = stream.raw, olderThanUsec = (newestLoadedSec + 1) * 1_000_000),
                 )
             }
         }

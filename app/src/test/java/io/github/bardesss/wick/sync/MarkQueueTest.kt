@@ -109,10 +109,25 @@ class MarkQueueTest {
         assertEquals(1, db.queueDao().pendingAll().size)
 
         assertTrue(q.flush())
-        assertEquals(listOf(StreamId.All.raw to 200_000_000L), api.markAllCalls)
+        assertEquals(listOf(StreamId.All.raw to 201_000_000L), api.markAllCalls)
         assertTrue(api.isRead("old"))
         assertFalse(api.isRead("new"))
         assertTrue(db.queueDao().pendingAll().isEmpty())
+    }
+
+    @Test
+    fun markAll_marks_the_newest_loaded_item_on_the_server() = runTest {
+        seed("a", publishedSec = 100)
+        seed("newest", publishedSec = 200)
+        val q = queue()
+
+        q.markAll(StreamId.All, null, newestLoadedSec = 200)
+        runCurrent()
+        assertTrue(q.flush())
+
+        assertTrue(row("newest").read)
+        assertTrue(api.isRead("newest"))
+        assertTrue(api.isRead("a"))
     }
 
     @Test
