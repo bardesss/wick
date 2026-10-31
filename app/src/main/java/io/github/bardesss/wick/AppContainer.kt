@@ -4,9 +4,12 @@ import android.content.Context
 import android.util.Log
 import androidx.room.Room
 import androidx.room.withTransaction
-import io.github.bardesss.wick.api.Auth
 import io.github.bardesss.wick.api.GReaderApi
 import io.github.bardesss.wick.api.ReaderApi
+import io.github.bardesss.wick.data.CredentialStore
+import io.github.bardesss.wick.data.KeystoreCredentialStore
+import io.github.bardesss.wick.data.KeystoreTokenCipher
+import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
@@ -24,16 +27,15 @@ class AppContainer(val context: Context) {
     val feedDao get() = db.feedDao()
     val queueDao get() = db.queueDao()
 
-    /** Set once the user has logged in; the API reads it on every call. */
-    @Volatile
-    var auth: Auth? = null
+    val creds: CredentialStore = KeystoreCredentialStore(context, KeystoreTokenCipher())
+    val settings: SettingsStore by lazy { SettingsStore.create(context) }
 
     val appScope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO +
             CoroutineExceptionHandler { _, e -> Log.e("Wick", "uncaught error in app scope", e) },
     )
 
-    val api: ReaderApi by lazy { GReaderApi(OkHttpClient()) { auth } }
+    val api: ReaderApi by lazy { GReaderApi(OkHttpClient()) { creds.auth() } }
     val markQueue: MarkQueue by lazy { MarkQueue(api, queueDao, itemDao, appScope, inTransaction = { block -> db.withTransaction { block() } })
     }
     val syncEngine: SyncEngine by lazy { SyncEngine(api, db, markQueue) }

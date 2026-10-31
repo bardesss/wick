@@ -11,7 +11,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 
-data class Auth(val server: String, val token: String)
+data class Auth(val server: String, val token: String) {
+    override fun toString() = "Auth(server=$server, token=***)"
+}
 
 class GReaderApi(
     private val client: OkHttpClient,
