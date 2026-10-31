@@ -1,0 +1,29 @@
+# Private: design docs and Claude-related files
+docs/
+.superpowers/
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# Signing keys (never commit)
+*.jks
+*.keystore
+keystore.properties
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
