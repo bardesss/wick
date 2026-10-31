@@ -4,7 +4,9 @@ import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.db.ItemEntity
 import io.github.bardesss.wick.db.WickDb
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -128,6 +130,35 @@ class MarkQueueTest {
         assertTrue(r.manualUnread)
         assertTrue(q.flush())
         assertTrue(api.setReadCalls.isEmpty())
+    }
+
+    @Test
+    fun reversal_during_flush_is_sent() = runTest {
+        seed("a")
+        val q = queue()
+        q.mark("a", read = true, manual = false)
+        runCurrent()
+
+        val gate = CompletableDeferred<Unit>()
+        api.beforeSetRead = { gate.await() }
+        val flushing = async { q.flush() }
+        runCurrent()
+
+        q.mark("a", read = false, manual = true)
+        runCurrent()
+        val pending = db.queueDao().pending().single()
+        assertFalse(pending.read)
+
+        gate.complete(Unit)
+        assertFalse(flushing.await())
+        assertTrue(api.isRead("a"))
+        assertFalse(row("a").read)
+
+        api.beforeSetRead = null
+        assertTrue(q.flush())
+        assertFalse(api.isRead("a"))
+        assertEquals(listOf(listOf("a") to true, listOf("a") to false), api.setReadCalls)
+        assertTrue(db.queueDao().pending().isEmpty())
     }
 
     @Test

@@ -9,6 +9,7 @@ import io.github.bardesss.wick.db.WickDb
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -119,6 +120,42 @@ class SyncEngineTest {
         assertEquals(0, covered["feed/2"])
         assertEquals(0, covered[StreamId.Folder("News").raw])
         assertEquals(2, covered[StreamId.All.raw])
+    }
+
+    @Test
+    fun count_stays_stable_after_flush() = runTest {
+        api.addItem("a", "feed/1", 100)
+        api.addItem("b", "feed/1", 110)
+        api.addItem("c", "feed/2", 120)
+        api.addItem("d", "feed/3", 130)
+        api.addItem("e", "feed/3", 140, read = true)
+        val q = MarkQueue(api, db.queueDao(), db.itemDao(), backgroundScope)
+        val engine = SyncEngine(api, db, q)
+        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+
+        q.mark("a", read = true, manual = false)
+        q.mark("d", read = true, manual = false)
+        runCurrent()
+        val before = engine.displayedCounts().first()
+        assertEquals(1, before["feed/1"])
+        assertEquals(0, before["feed/3"])
+
+        assertTrue(q.flush())
+        assertEquals(before, engine.displayedCounts().first())
+        assertEquals(1, db.feedDao().counts().first()["feed/1"])
+
+        // the server agrees with the adjusted counts
+        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        assertEquals(before, engine.displayedCounts().first())
+
+        q.markAll(StreamId.Folder("News"), listOf("feed/1", "feed/2"), newestLoadedSec = 1_000)
+        runCurrent()
+        assertTrue(q.flush())
+        val after = engine.displayedCounts().first()
+        assertEquals(0, after["feed/1"])
+        assertEquals(0, after["feed/2"])
+        assertEquals(0, db.feedDao().counts().first()["feed/2"])
+        assertEquals(0, after[StreamId.All.raw])
     }
 
     @Test

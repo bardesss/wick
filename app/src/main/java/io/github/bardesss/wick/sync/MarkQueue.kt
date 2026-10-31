@@ -7,6 +7,7 @@ import io.github.bardesss.wick.db.ItemDao
 import io.github.bardesss.wick.db.PendingMarkAllEntity
 import io.github.bardesss.wick.db.PendingMarkEntity
 import io.github.bardesss.wick.db.QueueDao
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -19,6 +20,8 @@ import kotlinx.coroutines.withContext
 
 private const val BATCH = 100
 private const val DEBOUNCE_MS = 3_000L
+private const val OP_ATTEMPTS = 3
+private const val OP_RETRY_MS = 1_000L
 
 /**
  * Writes read state to Room at once and sends it to the server later. Calls to [mark] and
@@ -36,10 +39,27 @@ class MarkQueue(
     private var debounce: Job? = null
     private var lastStamp = 0L
 
+    // Ids in the snapshot of the flush that is running. stateLock makes "read the queue and
+    // register it" and "check the registry and write a mark" atomic against each other.
+    private val stateLock = Mutex()
+    private val inFlight = HashSet<String>()
+
     init {
         scope.launch {
             for (op in ops) {
-                op()
+                var attempt = 0
+                while (true) {
+                    try {
+                        op()
+                        break
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // keep the loop alive; retry the same op a few times before dropping it
+                        if (++attempt >= OP_ATTEMPTS) break
+                        delay(OP_RETRY_MS)
+                    }
+                }
                 restartTimer()
             }
         }
@@ -48,7 +68,9 @@ class MarkQueue(
     fun mark(id: String, read: Boolean, manual: Boolean) {
         ops.trySend {
             itemDao.setRead(id, read, manualUnread = manual && !read)
-            queueDao.enqueueOrCancel(PendingMarkEntity(id, read, nextStamp()))
+            stateLock.withLock {
+                queueDao.enqueueOrCancel(PendingMarkEntity(id, read, nextStamp()), inFlight = id in inFlight)
+            }
         }
     }
 
@@ -68,24 +90,30 @@ class MarkQueue(
         for (m in queueDao.pendingAll()) {
             try {
                 api.markAllRead(StreamId.parse(m.streamRaw), m.olderThanUsec)
-                queueDao.deleteAll(m.id)
+                queueDao.completeMarkAll(m)
             } catch (e: ApiError) {
                 if (e.stopsFlush()) return false
                 clean = false
             }
         }
 
-        val marks = queueDao.pending()
-        for (read in listOf(true, false)) {
-            for (batch in marks.filter { it.read == read }.chunked(BATCH)) {
-                try {
-                    api.setRead(batch.map { it.itemId }, read)
-                    queueDao.deleteUnchanged(batch)
-                } catch (e: ApiError) {
-                    if (e.stopsFlush()) return false
-                    clean = false
+        val marks = stateLock.withLock {
+            queueDao.pending().also { snapshot -> inFlight.addAll(snapshot.map { it.itemId }) }
+        }
+        try {
+            for (read in listOf(true, false)) {
+                for (batch in marks.filter { it.read == read }.chunked(BATCH)) {
+                    try {
+                        api.setRead(batch.map { it.itemId }, read)
+                        stateLock.withLock { queueDao.completeSent(batch) }
+                    } catch (e: ApiError) {
+                        if (e.stopsFlush()) return false
+                        clean = false
+                    }
                 }
             }
+        } finally {
+            stateLock.withLock { inFlight.clear() }
         }
         clean && queueDao.pending().isEmpty() && queueDao.pendingAll().isEmpty()
     }

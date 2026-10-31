@@ -20,6 +20,9 @@ class FakeReaderApi : ReaderApi {
     val setReadCalls = mutableListOf<Pair<List<String>, Boolean>>()
     val markAllCalls = mutableListOf<Pair<String, Long>>()
 
+    /** Runs inside setRead before the change is applied, so a test can pause a request. */
+    var beforeSetRead: (suspend () -> Unit)? = null
+
     fun failNext(n: Int, error: ApiError = ApiError.Unreachable) {
         failures = n
         failWith = error
@@ -86,6 +89,7 @@ class FakeReaderApi : ReaderApi {
 
     override suspend fun setRead(itemIds: List<String>, read: Boolean) {
         check()
+        beforeSetRead?.invoke()
         setReadCalls += itemIds.toList() to read
         if (read) readIds += itemIds else readIds -= itemIds.toSet()
     }
