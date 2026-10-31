@@ -25,7 +25,14 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 import java.io.File
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.platform.LocalDensity
+import io.github.bardesss.wick.html.htmlToAnnotated
+import io.github.bardesss.wick.ui.sheet.SheetBody
+import io.github.bardesss.wick.ui.sheet.SummarySheet
 
 /** Viewing aid: writes PNGs to app/build/snapshots. It only checks the image is not empty. */
 @RunWith(RobolectricTestRunner::class)
@@ -41,7 +48,15 @@ class ScreenSnapshots {
         // captureToImage waits on a draw callback that never fires under Robolectric on this host, so draw the view directly.
         val view = rule.activity.window.decorView
         val bmp = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
-        view.draw(android.graphics.Canvas(bmp))
+        val canvas = android.graphics.Canvas(bmp)
+        view.draw(canvas)
+        // a sheet lives in a dialog window of its own; lay it over the screen behind it
+        ShadowDialog.getLatestDialog()?.takeIf { it.isShowing }?.window?.decorView?.let { sheet ->
+            canvas.save()
+            canvas.translate(0f, (view.height - sheet.height).toFloat())
+            sheet.draw(canvas)
+            canvas.restore()
+        }
         assertTrue(bmp.width > 0 && bmp.height > 0)
         val dir = File("build/snapshots").apply { mkdirs() }
         File(dir, "$name.png").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
@@ -92,6 +107,69 @@ class ScreenSnapshots {
             onFrame = { false },
         )
     }
+
+    @Test
+    fun list_swipes() = snap("list_swipes") {
+        // row 2 dragged right past the threshold, row 5 dragged left past it
+        val px = with(LocalDensity.current) { 100.dp.toPx() }
+        ListContent(
+            viewName = "All unread",
+            count = 87,
+            message = null,
+            rows = sample,
+            read = remember { mutableStateOf(setOf("1", "4", "6")) },
+            nowSec = now,
+            refreshing = false,
+            listState = rememberLazyListState(),
+            onRefresh = {},
+            onOpenPicker = {},
+            onOpen = {},
+            onFrame = { false },
+            swipePreview = mapOf("2" to px, "5" to -px),
+        )
+    }
+
+    private val article = """
+        <p>Ten years ago nearly every site carried a small orange icon. Most of those sites still
+        publish feeds today; they just stopped telling anyone about them.</p>
+        <p>The <a href="https://e.x/survey">survey</a> looked at 4,000 sites &amp; found three patterns:</p>
+        <ul><li>feeds still work but are <em>hidden</em></li><li>feeds were dropped in a redesign</li>
+        <li>feeds only carry a summary</li></ul>
+        <p>Whatever text the feed includes shows up here. <strong>Long text scrolls</strong> inside the sheet.</p>
+        <script>track()</script><img src="hero.jpg">
+    """.trimIndent()
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    private fun sheet(name: String, html: String?) = snap(name) {
+        ListContent(
+            viewName = "All unread",
+            count = 87,
+            message = null,
+            rows = sample,
+            read = remember { mutableStateOf(setOf("1", "4", "6")) },
+            nowSec = now,
+            refreshing = false,
+            listState = rememberLazyListState(),
+            onRefresh = {},
+            onOpenPicker = {},
+            onOpen = {},
+            onFrame = { false },
+        )
+        SummarySheet(
+            row = sample[4],
+            body = SheetBody.Ready(htmlToAnnotated(html)),
+            nowSec = now,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            onOpen = {},
+            onDismiss = {},
+        )
+    }
+
+    @Test
+    fun sheet_article() = sheet("sheet_article", article)
+
+    @Test
+    fun sheet_empty() = sheet("sheet_empty", null)
 
     @Test
     fun list_caught_up() = snap("list_caught_up") {
