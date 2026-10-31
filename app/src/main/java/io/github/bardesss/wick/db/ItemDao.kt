@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.flowOf
 
 data class LocalState(val id: String, val read: Boolean, val manualUnread: Boolean)
 
+data class ItemFeed(val id: String, val feedId: String)
+
 private const val CHUNK = 500
 
 @Dao
@@ -64,6 +66,26 @@ abstract class ItemDao {
 
     @Query("DELETE FROM ItemEntity WHERE id IN (:ids)")
     protected abstract suspend fun deleteByIds(ids: List<String>)
+
+    @Query("SELECT id, feedId FROM ItemEntity WHERE id IN (:ids)")
+    protected abstract suspend fun feedIdsChunk(ids: List<String>): List<ItemFeed>
+
+    @Query("UPDATE ItemEntity SET read = 1, manualUnread = 0 WHERE id IN (:ids)")
+    protected abstract suspend fun markReadByIds(ids: List<String>)
+
+    @Query("UPDATE ItemEntity SET manualUnread = 0 WHERE manualUnread = 1")
+    abstract suspend fun clearManualUnread()
+
+    suspend fun feedIdsOf(ids: List<String>): Map<String, String> =
+        ids.chunked(CHUNK).flatMap { feedIdsChunk(it) }.associate { it.id to it.feedId }
+
+    /** Marks local unread rows of [feedIds] (all feeds when null) read unless they are in [keep] or have a pending mark. */
+    @Transaction
+    open suspend fun markMissingRead(feedIds: List<String>?, keep: Set<String>) {
+        val candidates = unreadIds(feedIds, oldestFirst = false).filter { it !in keep }
+        val pending = candidates.chunked(CHUNK).flatMap { pendingAmong(it) }.toSet()
+        candidates.filter { it !in pending }.chunked(CHUNK).forEach { markReadByIds(it) }
+    }
 
     @Transaction
     open suspend fun upsertKeepingLocal(items: List<ItemEntity>) {

@@ -6,6 +6,16 @@ sealed interface StreamId {
     /** The raw id with the variable part percent-encoded, for use as URL path segments. */
     val encodedPath: String
 
+    companion object {
+        private const val LABEL_PREFIX = "user/-/label/"
+
+        fun parse(raw: String): StreamId = when {
+            raw == All.raw -> All
+            raw.startsWith(LABEL_PREFIX) -> Folder(raw.removePrefix(LABEL_PREFIX))
+            else -> Feed(raw)
+        }
+    }
+
     data object All : StreamId {
         override val raw = "user/-/state/com.google/reading-list"
         override val encodedPath = raw
