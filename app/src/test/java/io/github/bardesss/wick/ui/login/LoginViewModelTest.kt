@@ -109,6 +109,23 @@ class LoginViewModelTest {
     }
 
     @Test
+    fun storage_failure_shows_message_and_clears_busy() {
+        val throwing = object : CredentialStore by MemoryCreds() {
+            override suspend fun save(auth: Auth) = throw java.security.KeyStoreException("no key")
+        }
+        val vm = LoginViewModel(api, throwing)
+        vm.signIn("example.com", "me", "key")
+        assertEquals("Couldn't store the sign in on this device", vm.state.value.error)
+        assertFalse(vm.state.value.busy)
+    }
+
+    @Test
+    fun auth_to_string_hides_token() {
+        val s = Auth("https://a.b", "secret-token").toString()
+        assertEquals("Auth(server=https://a.b, token=***)", s)
+    }
+
+    @Test
     fun ignores_second_sign_in_while_busy() {
         api.gate = CompletableDeferred()
         val vm = LoginViewModel(api, creds)

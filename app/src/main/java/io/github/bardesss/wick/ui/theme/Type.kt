@@ -47,6 +47,8 @@ val WickTypography = Typography(
     titleMedium = WickText.Title,
     bodyLarge = WickText.SheetBody,
     bodyMedium = TextStyle(fontFamily = InstrumentSans, fontSize = 14.sp),
+    // Same line-height unit as bodyLarge so Material can interpolate the field label between them.
+    bodySmall = TextStyle(fontFamily = InstrumentSans, fontSize = 12.sp, lineHeight = 1.6.em),
     labelMedium = WickText.Meta,
     labelLarge = WickText.Meta.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
 )

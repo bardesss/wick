@@ -29,7 +29,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -48,11 +51,16 @@ import io.github.bardesss.wick.ui.theme.WickText
 @Composable
 fun LoginScreen(viewModel: LoginViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LoginContent(state, viewModel::signIn)
+}
+
+@Composable
+fun LoginContent(state: LoginState, onSignIn: (String, String, String) -> Unit) {
     var server by rememberSaveable { mutableStateOf("") }
     var user by rememberSaveable { mutableStateOf("") }
     var key by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
-    val submit = { viewModel.signIn(server, user, key) }
+    val submit = { onSignIn(server, user, key) }
 
     Column(
         modifier = Modifier
@@ -83,6 +91,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 value = user,
                 onValueChange = { user = it },
                 label = stringResource(R.string.login_user),
+                contentType = ContentType.Username,
                 keyboardOptions = KeyboardOptions(
                     autoCorrectEnabled = false,
                     keyboardType = KeyboardType.Text,
@@ -94,6 +103,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 value = key,
                 onValueChange = { key = it },
                 label = stringResource(R.string.login_key),
+                contentType = ContentType.Password,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(
                     autoCorrectEnabled = false,
@@ -164,6 +174,7 @@ private fun LoginField(
     label: String,
     keyboardOptions: KeyboardOptions,
     keyboardActions: KeyboardActions,
+    contentType: ContentType? = null,
     visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     OutlinedTextField(
@@ -187,6 +198,8 @@ private fun LoginField(
             unfocusedLabelColor = WickColors.Meta,
             cursorColor = WickColors.Amber,
         ),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().then(
+            if (contentType != null) Modifier.semantics { this.contentType = contentType } else Modifier,
+        ),
     )
 }

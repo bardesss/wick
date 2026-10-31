@@ -20,6 +20,7 @@ object LoginMessages {
     const val UNREACHABLE = "Can't reach the server. Is your VPN on?"
     const val BAD_CREDENTIALS = "Username or API key is wrong"
     const val NO_API = "No Google Reader API at this address"
+    const val STORAGE = "Couldn't store the sign in on this device"
     fun http(code: Int) = "The server answered with error $code"
 }
 
@@ -58,6 +59,8 @@ class LoginViewModel(
                 throw e
             } catch (e: ApiError) {
                 _state.value = LoginState(error = message(e))
+            } catch (e: Exception) {
+                _state.value = LoginState(error = LoginMessages.STORAGE)
             }
         }
     }
