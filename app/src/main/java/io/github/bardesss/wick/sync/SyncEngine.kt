@@ -36,6 +36,7 @@ class SyncEngine(
      */
     suspend fun refresh(view: StreamId, oldestFirst: Boolean): Result<List<String>> =
         queue.exclusive {
+            if (markAllStillQueued()) return@exclusive Result.failure(ApiError.Http(503))
             val fetched = try {
                 fetch(view, oldestFirst)
             } catch (e: ApiError) {
@@ -53,9 +54,13 @@ class SyncEngine(
             Result.success(ids)
         }
 
+    // A fetch while a mark-all is unsent would write the covered items back as unread.
+    private suspend fun markAllStillQueued() = db.queueDao().pendingAll().isNotEmpty()
+
     /** Like [refresh] for the whole account, but it only adds and updates rows. */
     suspend fun backgroundSync(): Result<Unit> =
         queue.exclusive {
+            if (markAllStillQueued()) return@exclusive Result.failure(ApiError.Http(503))
             val fetched = try {
                 fetch(StreamId.All, oldestFirst = false)
             } catch (e: ApiError) {
