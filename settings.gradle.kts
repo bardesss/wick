@@ -22,3 +22,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "wick"
 include(":app")
+include(":baselineprofile")
+

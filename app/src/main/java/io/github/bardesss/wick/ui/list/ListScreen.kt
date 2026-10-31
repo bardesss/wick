@@ -50,6 +50,7 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -290,7 +291,7 @@ fun ListContent(
                 // laying out an empty list before the rows arrive would reset a restored scroll position
                 if (rows != null) BoxWithConstraints(Modifier.fillMaxSize()) {
                     val footerHeight = maxHeight
-                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("list")) {
                         itemsIndexed(rows, key = { _, row -> row.id }, contentType = { _, _ -> "item" }) { index, row ->
                             val isRead by remember(row.id) { derivedStateOf { row.id in read.value } }
                             SwipeRow(
@@ -313,7 +314,7 @@ fun ListContent(
                                     nowSec = nowSec,
                                     divider = index > 0,
                                     onClick = { onOpen(row) },
-                                    modifier = moved.semantics {
+                                    modifier = moved.testTag("row").semantics {
                                         customActions = listOf(
                                             CustomAccessibilityAction(showTextLabel) { onShowText(row); true },
                                             CustomAccessibilityAction(if (isRead) markUnreadLabel else markReadLabel) {
@@ -372,6 +373,7 @@ private fun Header(name: String, count: Int, animate: Boolean, onClick: () -> Un
     Row(
         Modifier
             .fillMaxWidth()
+            .testTag("header")
             .clickable(interactionSource = null, indication = null, onClickLabel = chooseView, onClick = onClick)
             .statusBarsPadding()
             .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 10.dp),

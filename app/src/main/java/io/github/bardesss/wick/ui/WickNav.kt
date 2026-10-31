@@ -29,6 +29,7 @@ import io.github.bardesss.wick.ui.theme.WickColors
 import androidx.compose.foundation.background
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -66,7 +67,7 @@ fun WickNav(container: AppContainer) {
                 extras = activityExtras,
             )
             // the list stays composed under the settings page, so it keeps its place
-            Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
                 Box(
                     Modifier.fillMaxSize().then(
                         if (settingsOpen) Modifier.semantics { hideFromAccessibility() } else Modifier,
