@@ -85,7 +85,7 @@ class ListViewModelTest {
         sync = SyncEngine(api, db, queue)
     }
 
-    private fun vm(handle: SavedStateHandle = SavedStateHandle()): ListViewModel {
+    private fun TestScope.vm(handle: SavedStateHandle = SavedStateHandle()): ListViewModel {
         val store = ViewModelStore().also { stores += it }
         val factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -98,6 +98,7 @@ class ListViewModelTest {
                 queue = queue,
                 settings = settings,
                 creds = creds,
+                appScope = backgroundScope,
                 clock = { now },
                 work = main,
             ) as T
@@ -116,7 +117,17 @@ class ListViewModelTest {
     }
 
     private suspend fun TestScope.ids(vm: ListViewModel, expected: List<String>): List<String> =
-        settle(vm.rows) { rows -> rows.map { it.id } == expected }.map { it.id }
+        settle(vm.rows) { rows -> rows?.map { it.id } == expected }.orEmpty().map { it.id }
+
+    /** Polls until [n] fetches have started, in real time like [settle]. */
+    private suspend fun TestScope.awaitFetches(n: Int): Int {
+        repeat(150) {
+            runCurrent()
+            if (fetches >= n) return fetches
+            withContext(Dispatchers.IO) { Thread.sleep(10) }
+        }
+        return fetches
+    }
 
     private fun seedServer() {
         api.addItem("a", "feed/1", 100)
@@ -149,7 +160,7 @@ class ListViewModelTest {
         sync.backgroundSync().getOrThrow()
 
         assertEquals(3, settle(vm.count) { it == 3 })
-        assertEquals(listOf("b", "a"), vm.rows.value.map { it.id })
+        assertEquals(listOf("b", "a"), vm.rows.value?.map { it.id })
     }
 
     @Test
@@ -184,7 +195,7 @@ class ListViewModelTest {
                 ItemEntity("b", "feed/1", "T b", null, 200, null, read = false),
             ),
         )
-        db.snapshotDao().replaceSnapshot(listOf("b", "a"))
+        db.snapshotDao().replaceSnapshot(listOf("b", "a"), writtenAtMs = now)
         val gate = CompletableDeferred<Unit>()
         api.beforeUnread = { fetches++; gate.await() }
 
@@ -204,7 +215,7 @@ class ListViewModelTest {
     fun snapshot_survives_prune() = runTest(main, timeout = 30.seconds) {
         engine()
         db.itemDao().upsertKeepingLocal(listOf(ItemEntity("r", "feed/1", "T r", null, 100, null, read = true)))
-        db.snapshotDao().replaceSnapshot(listOf("r"))
+        db.snapshotDao().replaceSnapshot(listOf("r"), writtenAtMs = now)
 
         sync.refresh(StreamId.All, oldestFirst = false).getOrThrow()
 
@@ -223,7 +234,7 @@ class ListViewModelTest {
         vm.refresh()
 
         assertEquals(LoginMessages.UNREACHABLE, settle(vm.message) { it != null })
-        assertEquals(listOf("b", "a"), vm.rows.value.map { it.id })
+        assertEquals(listOf("b", "a"), vm.rows.value?.map { it.id })
 
         vm.refresh()
         ids(vm, listOf("c", "b", "a"))
@@ -256,7 +267,7 @@ class ListViewModelTest {
         now += 10 * 60_000L
         vm.onForeground()
         runCurrent()
-        assertEquals(listOf("b", "a"), vm.rows.value.map { it.id })
+        assertEquals(listOf("b", "a"), vm.rows.value?.map { it.id })
 
         vm.onBackground()
         now += 31 * 60_000L
@@ -316,5 +327,59 @@ class ListViewModelTest {
         vm.open("a")
 
         assertEquals(setOf("a"), settle(vm.read) { it == setOf("a") })
+    }
+
+    @Test
+    fun restored_stale_list_refreshes() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val handle = SavedStateHandle()
+        ids(vm(handle), listOf("b", "a"))
+        val before = awaitFetches(1)
+        api.addItem("c", "feed/2", 300)
+
+        // the process died and comes back after 31 minutes
+        now += 31 * 60_000L
+        val restored = vm(handle)
+
+        assertEquals(listOf("c", "b", "a"), ids(restored, listOf("c", "b", "a")))
+        assertEquals(before + 1, fetches)
+    }
+
+    @Test
+    fun restored_fresh_list_does_not_refresh() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val handle = SavedStateHandle()
+        ids(vm(handle), listOf("b", "a"))
+        val before = awaitFetches(1)
+        api.addItem("c", "feed/2", 300)
+
+        now += 5 * 60_000L
+        val restored = vm(handle)
+
+        assertEquals(listOf("b", "a"), ids(restored, listOf("b", "a")))
+        runCurrent()
+        assertEquals(before, fetches)
+    }
+
+    @Test
+    fun rows_scrolled_past_during_a_refresh_are_marked() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.refreshing) { !it }
+        val gate = CompletableDeferred<Unit>()
+        api.beforeUnread = { fetches++; gate.await() }
+        vm.refresh()
+        assertTrue(vm.refreshing.value)
+
+        for (t in 0L..400L step 16) vm.onVisible(frame(t, "b" to 0, "a" to 100))
+        vm.onVisible(frame(420, "a" to 0, firstIndex = 1))
+
+        assertEquals(setOf("b"), settle(vm.read) { it == setOf("b") })
+        gate.complete(Unit)
+        settle(vm.refreshing) { !it }
     }
 }

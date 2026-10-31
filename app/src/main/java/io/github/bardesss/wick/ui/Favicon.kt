@@ -31,9 +31,9 @@ import java.net.URI
 fun resolveIcon(server: String, iconUrl: String?): String? {
     val icon = iconUrl?.trim()
     if (icon.isNullOrEmpty()) return null
-    if (icon.contains("://")) return icon
     return try {
-        URI(server.trimEnd('/') + "/").resolve(icon).toString()
+        val uri = URI(icon)
+        if (uri.isAbsolute) icon else URI(server.trimEnd('/') + "/").resolve(uri).toString()
     } catch (e: Exception) {
         null
     }

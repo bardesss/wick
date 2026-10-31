@@ -1,5 +1,6 @@
 package io.github.bardesss.wick.ui.list
 
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -14,14 +15,16 @@ import io.github.bardesss.wick.data.CredentialStore
 import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.FeedDao
 import io.github.bardesss.wick.db.ItemDao
-import io.github.bardesss.wick.db.ItemRow
+import io.github.bardesss.wick.db.LocalState
 import io.github.bardesss.wick.db.SnapshotDao
+import io.github.bardesss.wick.db.SnapshotRow
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.ui.login.LoginMessages
 import io.github.bardesss.wick.ui.resolveIcon
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,10 +34,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,8 +52,11 @@ data class RowModel(
     val publishedSec: Long,
 )
 
+private const val TAG = "Wick"
 private const val KEY_VIEW = "view"
 private const val STALE_MS = 30 * 60_000L
+
+private class Marks(val read: Set<String>, val exempt: Set<String>)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ListViewModel(
@@ -63,6 +68,8 @@ class ListViewModel(
     private val queue: MarkQueue,
     private val settings: SettingsStore,
     private val creds: CredentialStore,
+    /** Outlives the view model, for work that must finish when the app goes to the background. */
+    private val appScope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
@@ -76,36 +83,34 @@ class ListViewModel(
     private var lastFrameIndex = HashMap<String, Int>()
     private var busy = false
     private var again = false
+    private var applying = false
     private var backgroundedAt: Long? = null
 
-    private val snapshot = snapshotDao.snapshotIds()
-        .onEach { resetTracking() }
-        .flatMapLatest { itemDao.byIds(it) }
-        .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 1)
-
-    val rows: StateFlow<List<RowModel>> = snapshot
-        .map { list ->
+    /**
+     * The snapshot rows, or null until they have been read once. Rebuilt only when the snapshot
+     * or the feeds change, so marking a row does not touch it.
+     */
+    val rows: StateFlow<List<RowModel>?> = combine(snapshotDao.snapshotIds(), feedDao.all()) { _, _ -> }
+        .mapLatest {
             val server = creds.auth()?.server.orEmpty()
-            list.map { it.toModel(server) }
+            snapshotDao.rowsNow().map { it.toModel(server) }
         }
         .flowOn(work)
         .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** False until the stored snapshot has been read once. */
-    val loaded: StateFlow<Boolean> = snapshot.map { true }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val marks = snapshotDao.states()
+        .map { states -> Marks(idsWhere(states) { it.read }, idsWhere(states) { it.manualUnread }) }
+        .flowOn(work)
+        .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 1)
 
     /** Ids of the snapshot rows that are read. */
-    val read: StateFlow<Set<String>> = snapshot
-        .map { list -> idsWhere(list) { it.read } }
-        .flowOn(work)
+    val read: StateFlow<Set<String>> = marks.map { it.read }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     // Rows the user marked unread by hand are left alone by scrolling until the next refresh.
-    private val exempt: StateFlow<Set<String>> = snapshot
-        .map { list -> idsWhere(list) { it.manualUnread } }
-        .flowOn(work)
+    private val exempt: StateFlow<Set<String>> = marks.map { it.exempt }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
@@ -134,11 +139,10 @@ class ListViewModel(
 
     init {
         savedState[KEY_VIEW] = _view.value.raw
-        if (!restored) {
-            viewModelScope.launch {
-                val stored = snapshotDao.snapshotIds().first()
-                startRefresh(indicator = stored.isEmpty())
-            }
+        viewModelScope.launch {
+            val stored = snapshotDao.snapshotIds().first()
+            // a fresh start always refreshes; a restored one only when the list is old
+            if (!restored || isStale()) startRefresh(indicator = stored.isEmpty())
         }
     }
 
@@ -156,14 +160,15 @@ class ListViewModel(
                 is StreamId.Folder -> feeds.filter { it.folder == view.name }.map { it.id }
                 is StreamId.Feed -> listOf(view.id)
             }
-            snapshotDao.replaceSnapshot(itemDao.unreadIds(feedIds, settings.oldestFirst.first()))
+            replaceSnapshot(itemDao.unreadIds(feedIds, settings.oldestFirst.first()), writtenAtMs = 0)
             startRefresh(indicator = true)
         }
     }
 
     /** Feeds one laid out frame of the list. Returns true while it wants the next frame too. */
     fun onVisible(frame: ListFrame): Boolean {
-        if (busy) return false
+        // the snapshot is being swapped; keep the frames coming so tracking resumes right after
+        if (applying) return true
         val readNow = read.value
         val current = HashMap<String, Int>(frame.items.size * 2)
         val visible = ArrayList<Visibility>(frame.items.size + 4)
@@ -196,7 +201,7 @@ class ListViewModel(
 
     fun onBackground() {
         backgroundedAt = clock()
-        viewModelScope.launch {
+        appScope.launch {
             try {
                 queue.flush()
             } catch (e: CancellationException) {
@@ -208,10 +213,15 @@ class ListViewModel(
     }
 
     fun onForeground() {
-        val since = backgroundedAt ?: return
+        // the first start of this view model is handled in init
+        backgroundedAt ?: return
         backgroundedAt = null
-        if (clock() - since > STALE_MS) startRefresh(indicator = true)
+        viewModelScope.launch {
+            if (!busy && isStale()) startRefresh(indicator = true)
+        }
     }
+
+    private suspend fun isStale(): Boolean = clock() - (snapshotDao.writtenAt() ?: 0L) > STALE_MS
 
     private fun startRefresh(indicator: Boolean) {
         if (indicator) _refreshing.value = true
@@ -234,7 +244,7 @@ class ListViewModel(
                     }
                     result.fold(
                         onSuccess = { ids ->
-                            if (v == _view.value) snapshotDao.replaceSnapshot(ids) else again = true
+                            if (v == _view.value) replaceSnapshot(ids, clock()) else again = true
                             _message.value = null
                         },
                         onFailure = { e ->
@@ -253,15 +263,26 @@ class ListViewModel(
         }
     }
 
-    private fun resetTracking() {
-        tracker.reset()
-        lastFrameIndex = HashMap()
+    /** Swaps the snapshot with scroll marking paused. On failure the old list stays. */
+    private suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long) {
+        applying = true
+        try {
+            snapshotDao.replaceSnapshot(ids, writtenAtMs)
+            tracker.reset()
+            lastFrameIndex = HashMap()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "could not store the new list", e)
+        } finally {
+            applying = false
+        }
     }
 
-    private fun idsWhere(list: List<ItemRow>, test: (ItemRow) -> Boolean): Set<String> =
+    private fun idsWhere(list: List<LocalState>, test: (LocalState) -> Boolean): Set<String> =
         list.filter(test).mapTo(HashSet()) { it.id }
 
-    private fun ItemRow.toModel(server: String) = RowModel(
+    private fun SnapshotRow.toModel(server: String) = RowModel(
         id = id,
         title = title,
         url = url,
@@ -282,6 +303,7 @@ class ListViewModel(
                     queue = c.markQueue,
                     settings = c.settings,
                     creds = c.creds,
+                    appScope = c.appScope,
                 )
             }
         }

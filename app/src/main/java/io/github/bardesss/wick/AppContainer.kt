@@ -8,6 +8,7 @@ import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import io.github.bardesss.wick.api.FaviconAuth
 import io.github.bardesss.wick.api.GReaderApi
 import io.github.bardesss.wick.api.ReaderApi
 import io.github.bardesss.wick.data.CredentialStore
@@ -23,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
+import java.io.File
 
 class AppContainer(val context: Context) {
     val db: WickDb by lazy {
@@ -49,15 +51,21 @@ class AppContainer(val context: Context) {
     val syncEngine: SyncEngine by lazy { SyncEngine(api, db, markQueue) }
 
     val imageLoader: ImageLoader by lazy {
-        ImageLoader.Builder(context)
-            .components { add(OkHttpNetworkFetcherFactory(callFactory = { http })) }
-            .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.05).build() }
-            .diskCache {
-                DiskCache.Builder()
-                    .directory(context.cacheDir.resolve("favicons").toOkioPath())
-                    .maxSizeBytes(16L * 1024 * 1024)
-                    .build()
-            }
-            .build()
+        // shares the connection pool with the API client, but only favicon requests get the key
+        val client = http.newBuilder().addInterceptor(FaviconAuth { creds.auth() }).build()
+        faviconLoader(context, client, context.cacheDir.resolve("favicons"))
     }
 }
+
+/** Coil loader for favicons. Memory and disk caches are keyed by the plain icon URL. */
+fun faviconLoader(context: Context, client: OkHttpClient, diskDir: File): ImageLoader =
+    ImageLoader.Builder(context)
+        .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }
+        .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.05).build() }
+        .diskCache {
+            DiskCache.Builder()
+                .directory(diskDir.toOkioPath())
+                .maxSizeBytes(16L * 1024 * 1024)
+                .build()
+        }
+        .build()

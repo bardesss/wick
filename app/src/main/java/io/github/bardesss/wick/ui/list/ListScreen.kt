@@ -71,7 +71,6 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
     val context = LocalContext.current
     val rows by vm.rows.collectAsStateWithLifecycle()
     val read = vm.read.collectAsStateWithLifecycle()
-    val loaded by vm.loaded.collectAsStateWithLifecycle()
     val count by vm.count.collectAsStateWithLifecycle()
     val name by vm.viewName.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
@@ -90,10 +89,11 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
     }
 
     // a new snapshot starts at the top; the first one keeps any restored position
-    val ids = remember(rows) { rows.map { it.id } }
+    val ids = remember(rows) { rows?.map { it.id } }
     var shownIds by remember { mutableStateOf<List<String>?>(null) }
     LaunchedEffect(ids) {
-        if (shownIds != null && shownIds != ids) listState.scrollToItem(0)
+        if (ids == null) return@LaunchedEffect
+        if (!shownIds.isNullOrEmpty() && shownIds != ids) listState.scrollToItem(0)
         shownIds = ids
     }
 
@@ -103,7 +103,6 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
         message = message,
         rows = rows,
         read = read,
-        loaded = loaded,
         nowSec = nowSec,
         refreshing = refreshing,
         listState = listState,
@@ -125,9 +124,9 @@ fun ListContent(
     viewName: String,
     count: Int,
     message: String?,
-    rows: List<RowModel>,
+    /** Null until the stored list has been read; nothing is laid out until then. */
+    rows: List<RowModel>?,
     read: State<Set<String>>,
-    loaded: Boolean,
     nowSec: Long,
     refreshing: Boolean,
     listState: LazyListState,
@@ -172,7 +171,8 @@ fun ListContent(
                 )
             },
         ) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
+            // laying out an empty list before the rows arrive would reset a restored scroll position
+            if (rows != null) BoxWithConstraints(Modifier.fillMaxSize()) {
                 val footerHeight = maxHeight
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     itemsIndexed(rows, key = { _, row -> row.id }, contentType = { _, _ -> "item" }) { index, row ->
@@ -185,10 +185,8 @@ fun ListContent(
                             onClick = { onOpen(row) },
                         )
                     }
-                    if (loaded) {
-                        item(key = FOOTER_KEY, contentType = "caught_up") {
-                            CaughtUp(Modifier.height(footerHeight))
-                        }
+                    item(key = FOOTER_KEY, contentType = "caught_up") {
+                        CaughtUp(Modifier.height(footerHeight))
                     }
                 }
             }

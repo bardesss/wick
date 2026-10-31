@@ -22,6 +22,14 @@ class FaviconTest {
     }
 
     @Test
+    fun relative_icon_with_url_in_query_is_still_relative() {
+        assertEquals(
+            "https://feeds.example.com/rest/feed/favicon/3?from=https://site.example.org/",
+            resolveIcon("https://feeds.example.com", "rest/feed/favicon/3?from=https://site.example.org/"),
+        )
+    }
+
+    @Test
     fun absolute_icon_returned_as_is() {
         assertEquals("https://cdn.example.org/i.png", resolveIcon("https://feeds.example.com", "https://cdn.example.org/i.png"))
         assertEquals("http://x.example.org/f.ico", resolveIcon("https://feeds.example.com", "http://x.example.org/f.ico"))

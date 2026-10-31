@@ -52,6 +52,13 @@ data class SnapshotEntity(
     val itemId: String,
 )
 
+/** A single row (id 0) holding when the snapshot was last written from the server. */
+@Entity
+data class SnapshotMetaEntity(
+    @PrimaryKey val id: Int = 0,
+    val writtenAtMs: Long,
+)
+
 data class ItemRow(
     val id: String,
     val feedId: String,

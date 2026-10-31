@@ -11,6 +11,7 @@ import androidx.room.RoomDatabase
         PendingMarkEntity::class,
         PendingMarkAllEntity::class,
         SnapshotEntity::class,
+        SnapshotMetaEntity::class,
     ],
     version = 1,
     exportSchema = false,
