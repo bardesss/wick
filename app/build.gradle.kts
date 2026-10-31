@@ -74,6 +74,10 @@ kotlin {
     jvmToolchain(21)
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // The fake server mode is in every build type except release, so R8 removes it there.
 // The baseline profile plugin adds benchmarkRelease and nonMinifiedRelease, which get it too.
 androidComponents {

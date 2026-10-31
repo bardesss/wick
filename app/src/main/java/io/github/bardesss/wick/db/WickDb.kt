@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
         SnapshotMetaEntity::class,
     ],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class WickDb : RoomDatabase() {
     abstract fun itemDao(): ItemDao
