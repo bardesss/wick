@@ -14,7 +14,8 @@ import kotlinx.coroutines.runBlocking
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (BuildConfig.FAKE_ENABLED && packageName.endsWith(FakeServerMode.PACKAGE_SUFFIX)) {
+        // seed once per launch, not again after rotation or a restore
+        if (savedInstanceState == null && BuildConfig.FAKE_ENABLED && packageName.endsWith(FakeServerMode.PACKAGE_SUFFIX)) {
             val count = intent.getIntExtra(FakeServerMode.EXTRA, 0)
             if (count > 0) {
                 // the list must find the seeded data when it first reads the database

@@ -1,4 +1,4 @@
-﻿# Project-specific R8 rules. kotlinx.serialization, Room, WorkManager, Coil, OkHttp and jsoup
+# Project-specific R8 rules. kotlinx.serialization, Room, WorkManager, Coil, OkHttp and jsoup
 # ship consumer rules, so the @Serializable DTOs, the Room database and its DAOs are kept
 # without anything here. Checked against the R8 seeds and mapping of a release build.
 
