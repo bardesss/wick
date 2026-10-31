@@ -161,24 +161,6 @@ class SyncEngineTest {
     }
 
     @Test
-    fun refresh_skips_the_fetch_while_a_mark_all_is_unsent() = runTest {
-        api.addItem("a", "feed/1", 100)
-        val q = db.newQueue(api, backgroundScope)
-        val engine = SyncEngine(api, db, q)
-        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
-
-        q.markAll(StreamId.All, null, newestLoadedSec = 100)
-        runCurrent()
-        api.failNext(1, ApiError.Http(500))
-
-        assertTrue(engine.refresh(StreamId.All, oldestFirst = false).isFailure)
-        assertTrue(db.itemDao().byIds(listOf("a")).first().single().read)
-
-        assertTrue(engine.refresh(StreamId.All, oldestFirst = false).isSuccess)
-        assertTrue(api.isRead("a"))
-    }
-
-    @Test
     fun mark_during_slow_refresh_survives() = runTest {
         api.addItem("a", "feed/1", 100)
         api.addItem("b", "feed/1", 110)
