@@ -45,6 +45,13 @@ data class PendingMarkAllEntity(
     val olderThanUsec: Long,
 )
 
+/** One row of the list snapshot: the item at position [pos]. */
+@Entity
+data class SnapshotEntity(
+    @PrimaryKey val pos: Int,
+    val itemId: String,
+)
+
 data class ItemRow(
     val id: String,
     val feedId: String,

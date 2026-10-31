@@ -2,11 +2,8 @@ package io.github.bardesss.wick.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -15,16 +12,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.bardesss.wick.AppContainer
-import io.github.bardesss.wick.R
+import io.github.bardesss.wick.ui.list.ListScreen
+import io.github.bardesss.wick.ui.list.ListViewModel
 import io.github.bardesss.wick.ui.login.LoginScreen
 import io.github.bardesss.wick.ui.login.LoginViewModel
 import io.github.bardesss.wick.ui.theme.WickColors
-import io.github.bardesss.wick.ui.theme.WickText
 
 @Composable
 fun WickNav(container: AppContainer) {
@@ -44,24 +39,12 @@ fun WickNav(container: AppContainer) {
             BackHandler { settingsOpen = false }
             SettingsPlaceholder()
         }
-        else -> ListPlaceholder(onOpenSettings = { settingsOpen = true })
-    }
-}
-
-/** Task 6 replaces this with the list. */
-@Composable
-private fun ListPlaceholder(onOpenSettings: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(WickColors.Night)) {
-        Wordmark(Modifier.align(Alignment.Center))
-        Text(
-            text = stringResource(R.string.settings),
-            style = WickText.Meta,
-            color = WickColors.Meta,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 48.dp)
-                .clickable(onClick = onOpenSettings),
-        )
+        else -> {
+            // a new sign in gets a fresh list
+            val vm: ListViewModel = viewModel(key = "list-" + auth.hashCode(), factory = ListViewModel.factory(container))
+            // Task 8 opens the picker here
+            ListScreen(vm, onOpenPicker = {})
+        }
     }
 }
 

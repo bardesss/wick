@@ -9,6 +9,7 @@ object WickColors {
     val Paper = Color(0xFFECE8E1)
     val Faded = Color(0xFF4B545E)
     val Meta = Color(0xFF7F8A96)
+    val MetaDim = Color(0xFF3D454E)
     val Amber = Color(0xFFE3A857)
     val Dusk = Color(0xFF5A4628)
     val Sage = Color(0xFF3D5C4E)
