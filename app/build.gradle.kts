@@ -1,5 +1,4 @@
 import com.android.build.api.variant.BuildConfigField
-import java.util.Base64
 
 plugins {
     alias(libs.plugins.android.application)
@@ -13,15 +12,13 @@ val appVersionName = providers.gradleProperty("versionName").getOrElse("0.1.0")
 val versionParts = Regex("""(\d+)\.(\d+)\.(\d+)""").matchEntire(appVersionName)
     ?.groupValues?.drop(1)?.map { it.toInt() }
     ?: throw GradleException("versionName must look like X.Y.Z, got: $appVersionName")
+if (versionParts[1] > 99 || versionParts[2] > 99) {
+    throw GradleException("minor and patch must be 99 or less, got: $appVersionName")
+}
 val appVersionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
 
-// The release key comes from CI secrets. Without them the release APK is left unsigned.
-val keystoreB64 = providers.environmentVariable("WICK_KEYSTORE_B64").orNull
-val releaseKeystore = layout.buildDirectory.file("signing/release.jks").get().asFile
-if (!keystoreB64.isNullOrBlank()) {
-    releaseKeystore.parentFile.mkdirs()
-    releaseKeystore.writeBytes(Base64.getMimeDecoder().decode(keystoreB64))
-}
+// CI decodes the release key to a file. Without it the release APK is left unsigned.
+val keystorePath = providers.environmentVariable("WICK_KEYSTORE_PATH").orNull
 
 android {
     namespace = "io.github.bardesss.wick"
@@ -36,9 +33,9 @@ android {
     }
 
     signingConfigs {
-        if (!keystoreB64.isNullOrBlank()) {
+        if (!keystorePath.isNullOrBlank()) {
             create("release") {
-                storeFile = releaseKeystore
+                storeFile = file(keystorePath)
                 storePassword = System.getenv("WICK_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("WICK_KEY_ALIAS")
                 keyPassword = System.getenv("WICK_KEY_PASSWORD")
