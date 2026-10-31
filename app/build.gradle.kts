@@ -1,4 +1,5 @@
 import com.android.build.api.variant.BuildConfigField
+import java.util.Base64
 
 plugins {
     alias(libs.plugins.android.application)
@@ -6,6 +7,20 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.androidx.baselineprofile)
+}
+
+val appVersionName = providers.gradleProperty("versionName").getOrElse("0.1.0")
+val versionParts = Regex("""(\d+)\.(\d+)\.(\d+)""").matchEntire(appVersionName)
+    ?.groupValues?.drop(1)?.map { it.toInt() }
+    ?: throw GradleException("versionName must look like X.Y.Z, got: $appVersionName")
+val appVersionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
+
+// The release key comes from CI secrets. Without them the release APK is left unsigned.
+val keystoreB64 = providers.environmentVariable("WICK_KEYSTORE_B64").orNull
+val releaseKeystore = layout.buildDirectory.file("signing/release.jks").get().asFile
+if (!keystoreB64.isNullOrBlank()) {
+    releaseKeystore.parentFile.mkdirs()
+    releaseKeystore.writeBytes(Base64.getMimeDecoder().decode(keystoreB64))
 }
 
 android {
@@ -16,12 +31,24 @@ android {
         applicationId = "io.github.bardesss.wick"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+    }
+
+    signingConfigs {
+        if (!keystoreB64.isNullOrBlank()) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("WICK_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("WICK_KEY_ALIAS")
+                keyPassword = System.getenv("WICK_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

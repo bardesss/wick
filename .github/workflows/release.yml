@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: Version to build (dry run, nothing is published)
+        default: 0.0.0
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      EVENT: ${{ github.event_name }}
+      REF_NAME: ${{ github.ref_name }}
+      INPUT_VERSION: ${{ inputs.versionName }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Work out the version
+        run: |
+          if [ "$EVENT" = "push" ]; then
+            tag="$REF_NAME"
+          else
+            tag="v$INPUT_VERSION"
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "VERSION=${tag#v}" >> "$GITHUB_ENV"
+
+      - name: Build the release APK
+        env:
+          WICK_KEYSTORE_B64: ${{ secrets.WICK_KEYSTORE_B64 }}
+          WICK_KEYSTORE_PASSWORD: ${{ secrets.WICK_KEYSTORE_PASSWORD }}
+          WICK_KEY_ALIAS: ${{ secrets.WICK_KEY_ALIAS }}
+          WICK_KEY_PASSWORD: ${{ secrets.WICK_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease -PversionName="$VERSION"
+
+      - name: Check the signature
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$apk" ]; then
+            echo "No signed APK was produced. Are the signing secrets set?"
+            exit 1
+          fi
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)
+          cp "$apk" "wick-$TAG.apk"
+          "$apksigner" verify --print-certs "wick-$TAG.apk"
+
+      - name: Publish the release
+        if: github.event_name == 'push'
+        # softprops/action-gh-release v3.0.3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64
+        with:
+          body: Wick ${{ github.ref_name }}. Install or update with Obtainium.
+          files: wick-${{ github.ref_name }}.apk
+
+      - name: Keep the APK from a dry run
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wick-${{ env.TAG }}
+          path: wick-${{ env.TAG }}.apk
