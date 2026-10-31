@@ -15,6 +15,7 @@ import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.data.CredentialStore
 import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.FeedDao
+import io.github.bardesss.wick.db.FeedEntity
 import io.github.bardesss.wick.db.ItemDao
 import io.github.bardesss.wick.db.LocalState
 import io.github.bardesss.wick.db.SnapshotDao
@@ -23,6 +24,8 @@ import io.github.bardesss.wick.html.htmlToAnnotated
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.ui.login.LoginMessages
+import io.github.bardesss.wick.ui.picker.PickerEntry
+import io.github.bardesss.wick.ui.picker.buildPicker
 import io.github.bardesss.wick.ui.resolveIcon
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -131,6 +134,16 @@ class ListViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** The drawer list with the icons resolved against the server. */
+    val picker: StateFlow<List<PickerEntry>> = combine(feedDao.all(), sync.displayedCounts()) { feeds, counts ->
+        val server = creds.auth()?.server.orEmpty()
+        buildPicker(feeds, counts).map { e ->
+            if (e is PickerEntry.Feed) e.copy(iconUrl = resolveIcon(server, e.iconUrl)) else e
+        }
+    }
+        .flowOn(work)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(PickerEntry.All(0)))
+
     private val _refreshing = MutableStateFlow(false)
 
     /** True while the pull indicator should show. */
@@ -144,6 +157,13 @@ class ListViewModel(
     init {
         savedState[KEY_VIEW] = _view.value.raw
         viewModelScope.launch {
+            // a fresh start shows the view the stored list belongs to
+            if (!restored) {
+                snapshotDao.viewRaw()?.let { raw ->
+                    _view.value = StreamId.parse(raw)
+                    savedState[KEY_VIEW] = raw
+                }
+            }
             val stored = snapshotDao.snapshotIds().first()
             // a fresh start always refreshes; a restored one only when the list is old
             if (!restored || isStale()) startRefresh(indicator = stored.isEmpty())
@@ -158,13 +178,23 @@ class ListViewModel(
         savedState[KEY_VIEW] = view.raw
         viewModelScope.launch {
             // show what is stored for the view at once; the refresh then brings it up to date
-            val feeds = feedDao.feedsNow()
-            val feedIds = when (view) {
-                StreamId.All -> null
-                is StreamId.Folder -> feeds.filter { it.folder == view.name }.map { it.id }
-                is StreamId.Feed -> listOf(view.id)
-            }
-            replaceSnapshot(itemDao.unreadIds(feedIds, settings.oldestFirst.first()), writtenAtMs = 0)
+            val feedIds = feedIdsOf(view, feedDao.feedsNow())
+            replaceSnapshot(itemDao.unreadIds(feedIds, settings.oldestFirst.first()), writtenAtMs = 0, view)
+            startRefresh(indicator = true)
+        }
+    }
+
+    /**
+     * Marks the whole view read on the server, up to the newest row loaded, then refreshes.
+     * Items that arrived after that stay unread.
+     */
+    fun markAllRead() {
+        val v = _view.value
+        viewModelScope.launch {
+            val newest = rows.value?.maxOfOrNull { it.publishedSec } ?: (clock() / 1000)
+            queue.markAll(v, feedIdsOf(v, feedDao.feedsNow()), newest)
+            // the refresh must see the mark-all in the queue
+            queue.awaitApplied()
             startRefresh(indicator = true)
         }
     }
@@ -254,7 +284,7 @@ class ListViewModel(
                     }
                     result.fold(
                         onSuccess = { ids ->
-                            if (v == _view.value) replaceSnapshot(ids, clock()) else again = true
+                            if (v == _view.value) replaceSnapshot(ids, clock(), v) else again = true
                             _message.value = null
                         },
                         onFailure = { e ->
@@ -274,10 +304,10 @@ class ListViewModel(
     }
 
     /** Swaps the snapshot with scroll marking paused. On failure the old list stays. */
-    private suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long) {
+    private suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long, view: StreamId) {
         applying = true
         try {
-            snapshotDao.replaceSnapshot(ids, writtenAtMs)
+            snapshotDao.replaceSnapshot(ids, writtenAtMs, view.raw)
             tracker.reset()
             lastFrameIndex = HashMap()
         } catch (e: CancellationException) {
@@ -287,6 +317,12 @@ class ListViewModel(
         } finally {
             applying = false
         }
+    }
+
+    private fun feedIdsOf(view: StreamId, feeds: List<FeedEntity>): List<String>? = when (view) {
+        StreamId.All -> null
+        is StreamId.Folder -> feeds.filter { it.folder == view.name }.map { it.id }
+        is StreamId.Feed -> listOf(view.id)
     }
 
     private fun idsWhere(list: List<LocalState>, test: (LocalState) -> Boolean): Set<String> =

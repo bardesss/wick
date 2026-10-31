@@ -52,11 +52,12 @@ data class SnapshotEntity(
     val itemId: String,
 )
 
-/** A single row (id 0) holding when the snapshot was last written from the server. */
+/** A single row (id 0) holding when the snapshot was last written and which view it belongs to. */
 @Entity
 data class SnapshotMetaEntity(
     @PrimaryKey val id: Int = 0,
     val writtenAtMs: Long,
+    val viewRaw: String = "user/-/state/com.google/reading-list",
 )
 
 data class ItemRow(

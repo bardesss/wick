@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -29,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +50,9 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +63,9 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.ui.openLink
+import io.github.bardesss.wick.ui.picker.MarkAllArm
+import io.github.bardesss.wick.ui.picker.PickerDrawer
+import io.github.bardesss.wick.ui.picker.show
 import io.github.bardesss.wick.ui.rememberHaptics
 import io.github.bardesss.wick.ui.rememberReducedMotion
 import io.github.bardesss.wick.ui.sheet.SheetBody
@@ -78,7 +86,7 @@ private const val FOOTER_KEY = 0
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
+fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val rows by vm.rows.collectAsStateWithLifecycle()
     val read = vm.read.collectAsStateWithLifecycle()
@@ -86,7 +94,11 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
     val name by vm.viewName.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val view by vm.view.collectAsStateWithLifecycle()
+    val picker by vm.picker.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val arm = remember { MarkAllArm() }
 
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.onBackground() }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { vm.onForeground() }
@@ -111,6 +123,10 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
     val haptics = rememberHaptics(vm.haptics)
     val reducedMotion by rememberReducedMotion()
     val scope = rememberCoroutineScope()
+    // closing the drawer, however it happens, disarms "Mark all read"
+    LaunchedEffect(drawerState) {
+        snapshotFlow { drawerState.currentValue }.collect { if (it == DrawerValue.Closed) arm.disarm() }
+    }
     val snackbar = remember { SnackbarHostState() }
     val toast = remember { arrayOfNulls<Job>(1) }
     val markedRead = stringResource(R.string.list_marked_read)
@@ -128,6 +144,33 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
         }
     }
 
+    PickerDrawer(
+        state = drawerState,
+        entries = picker,
+        selected = view,
+        markCount = count,
+        armed = arm.armed,
+        animate = !reducedMotion,
+        onSelect = { v ->
+            vm.select(v)
+            scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
+        },
+        onMarkAll = {
+            if (arm.armed) {
+                if (arm.confirm()) {
+                    haptics.tick()
+                    vm.markAllRead()
+                    scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
+                }
+            } else if (count > 0) {
+                arm.arm()
+            }
+        },
+        onSettings = {
+            scope.launch { drawerState.show(open = false, animate = false) }
+            onOpenSettings()
+        },
+    ) {
     ListContent(
         viewName = name ?: stringResource(R.string.list_all_unread),
         count = count,
@@ -138,7 +181,7 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
         refreshing = refreshing,
         listState = listState,
         onRefresh = vm::refresh,
-        onOpenPicker = onOpenPicker,
+        onOpenPicker = { scope.launch { drawerState.show(open = true, animate = !reducedMotion) } },
         onOpen = open,
         onFrame = vm::onVisible,
         onShowText = { row -> sheetId = row.id },
@@ -153,6 +196,7 @@ fun ListScreen(vm: ListViewModel, onOpenPicker: () -> Unit) {
         reducedMotion = reducedMotion,
         snackbar = snackbar,
     )
+    }
 
     // a refresh may drop the row; the open sheet keeps showing it until the user closes it
     val sheetRow = sheetId?.let { id -> rows?.firstOrNull { it.id == id } ?: sheetKept[0]?.takeIf { it.id == id } }
@@ -210,6 +254,9 @@ fun ListContent(
         }
     }
     val lock = remember { SwipeLock() }
+    val showTextLabel = stringResource(R.string.row_show_text)
+    val markReadLabel = stringResource(R.string.row_mark_read)
+    val markUnreadLabel = stringResource(R.string.row_mark_unread)
 
     Box(Modifier.fillMaxSize().background(WickColors.Night)) {
         Column(Modifier.fillMaxSize()) {
@@ -264,7 +311,15 @@ fun ListContent(
                                     nowSec = nowSec,
                                     divider = index > 0,
                                     onClick = { onOpen(row) },
-                                    modifier = moved,
+                                    modifier = moved.semantics {
+                                        customActions = listOf(
+                                            CustomAccessibilityAction(showTextLabel) { onShowText(row); true },
+                                            CustomAccessibilityAction(if (isRead) markUnreadLabel else markReadLabel) {
+                                                onToggle(row)
+                                                true
+                                            },
+                                        )
+                                    },
                                 )
                             }
                         }
@@ -296,6 +351,7 @@ fun ListContent(
 
 @Composable
 private fun Header(name: String, count: Int, animate: Boolean, onClick: () -> Unit) {
+    val chooseView = stringResource(R.string.list_choose_view)
     var tick by remember { mutableStateOf(false) }
     var shown by remember { mutableIntStateOf(count) }
     LaunchedEffect(count) {
@@ -314,7 +370,7 @@ private fun Header(name: String, count: Int, animate: Boolean, onClick: () -> Un
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(interactionSource = null, indication = null, onClick = onClick)
+            .clickable(interactionSource = null, indication = null, onClickLabel = chooseView, onClick = onClick)
             .statusBarsPadding()
             .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 10.dp),
     ) {

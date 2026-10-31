@@ -9,6 +9,7 @@ import io.github.bardesss.wick.db.PendingMarkAllEntity
 import io.github.bardesss.wick.db.PendingMarkEntity
 import io.github.bardesss.wick.db.QueueDao
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -93,6 +94,13 @@ class MarkQueue(
                 )
             }
         }
+    }
+
+    /** Returns once every [mark] and [markAll] made before this call has been applied to Room. */
+    suspend fun awaitApplied() {
+        val done = CompletableDeferred<Unit>()
+        ops.trySend { done.complete(Unit) }
+        done.await()
     }
 
     /** Sends what is queued. Returns true when nothing is left in the queue. */

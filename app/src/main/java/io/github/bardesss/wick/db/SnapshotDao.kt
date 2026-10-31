@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import io.github.bardesss.wick.api.StreamId
 import kotlinx.coroutines.flow.Flow
 
 /** What a list row shows. Read state is queried on its own, see [SnapshotDao.states]. */
@@ -36,6 +37,10 @@ abstract class SnapshotDao {
     @Query("SELECT writtenAtMs FROM SnapshotMetaEntity WHERE id = 0")
     abstract suspend fun writtenAt(): Long?
 
+    /** The raw stream id of the view the snapshot was made for, or null if there is none yet. */
+    @Query("SELECT viewRaw FROM SnapshotMetaEntity WHERE id = 0")
+    abstract suspend fun viewRaw(): String?
+
     @Query(
         "SELECT i.id, i.title, i.url, i.publishedSec, f.title AS feedTitle, f.iconUrl AS feedIconUrl " +
             "FROM SnapshotEntity s JOIN ItemEntity i ON i.id = s.itemId " +
@@ -46,11 +51,14 @@ abstract class SnapshotDao {
     @Query("SELECT i.id, i.read, i.manualUnread FROM SnapshotEntity s JOIN ItemEntity i ON i.id = s.itemId")
     abstract fun states(): Flow<List<LocalState>>
 
-    /** Replaces the ids and records [writtenAtMs]; 0 marks a list that did not come from the server. */
+    /**
+     * Replaces the ids and records [writtenAtMs] and the [viewRaw] they belong to; a time of 0
+     * marks a list that did not come from the server.
+     */
     @Transaction
-    open suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long) {
+    open suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long, viewRaw: String = StreamId.All.raw) {
         clear()
         ids.mapIndexed { pos, id -> SnapshotEntity(pos, id) }.chunked(500).forEach { insert(it) }
-        setMeta(SnapshotMetaEntity(writtenAtMs = writtenAtMs))
+        setMeta(SnapshotMetaEntity(writtenAtMs = writtenAtMs, viewRaw = viewRaw))
     }
 }

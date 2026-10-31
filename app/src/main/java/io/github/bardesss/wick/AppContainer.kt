@@ -55,6 +55,12 @@ class AppContainer(val context: Context) {
         val client = http.newBuilder().addInterceptor(FaviconAuth { creds.auth() }).build()
         faviconLoader(context, client, context.cacheDir.resolve("favicons"))
     }
+
+    /** Drops every cached favicon, in memory and on disk. Blocks on the disk, so call it off the main thread. */
+    fun clearImages() {
+        imageLoader.memoryCache?.clear()
+        imageLoader.diskCache?.clear()
+    }
 }
 
 /** Coil loader for favicons. Memory and disk caches are keyed by the plain icon URL. */
