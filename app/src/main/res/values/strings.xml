@@ -11,4 +11,9 @@
     <string name="list_all_unread">All unread</string>
     <string name="caught_up_title">All caught up</string>
     <string name="caught_up_hint">Pull down to check for new items</string>
+    <string name="list_marked_read">Marked read</string>
+    <string name="list_marked_unread">Marked unread</string>
+    <string name="sheet_age">%1$s ago</string>
+    <string name="sheet_no_text">This feed doesn\'t include any text</string>
+    <string name="sheet_open_browser">Open in browser</string>
 </resources>

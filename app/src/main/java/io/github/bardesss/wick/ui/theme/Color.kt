@@ -14,4 +14,5 @@ object WickColors {
     val Dusk = Color(0xFF5A4628)
     val Sage = Color(0xFF3D5C4E)
     val Core = Color(0xFFFFE2A8)
+    val Handle = Color(0xFF3A434D)
 }
