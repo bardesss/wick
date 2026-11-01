@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # libraries, plugins and the Gradle wrapper
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # minor and patch updates land as one PR; majors come one by one
+      gradle-minor:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ['*']
