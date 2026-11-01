@@ -119,7 +119,6 @@ class SwipeEdgeTest {
                     entries = listOf(PickerEntry.All(2)),
                     selected = StreamId.All,
                     markCount = 2,
-                    markEnabled = true,
                     armed = false,
                     animate = false,
                     onSelect = {},

@@ -2,7 +2,6 @@ package io.github.bardesss.wick.ui.list
 
 import android.util.Log
 import androidx.compose.runtime.Immutable
-import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.createSavedStateHandle
@@ -22,12 +21,16 @@ import io.github.bardesss.wick.db.LocalState
 import io.github.bardesss.wick.db.SnapshotDao
 import io.github.bardesss.wick.db.SnapshotRow
 import io.github.bardesss.wick.html.htmlToAnnotated
+import io.github.bardesss.wick.html.leadImageUrl
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.ui.login.LoginMessages
 import io.github.bardesss.wick.ui.picker.PickerEntry
 import io.github.bardesss.wick.ui.picker.buildPicker
+import io.github.bardesss.wick.ui.picker.foldPicker
+import io.github.bardesss.wick.ui.picker.hideEmpty
 import io.github.bardesss.wick.ui.resolveIcon
+import io.github.bardesss.wick.ui.sheet.SheetBody
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -138,17 +141,19 @@ class ListViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** Whether "Mark all read" has rows to take its cutoff from. */
-    val canMarkAll: StateFlow<Boolean> = rows.map { !it.isNullOrEmpty() }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
     /** The drawer list with the icons resolved against the server. */
-    val picker: StateFlow<List<PickerEntry>> = combine(feedDao.all(), sync.displayedCounts()) { feeds, counts ->
+    val picker: StateFlow<List<PickerEntry>> = combine(
+        feedDao.all(),
+        sync.displayedCounts(),
+        settings.collapsedFolders,
+        settings.hideEmpty,
+        _view,
+    ) { feeds, counts, collapsed, hide, selected ->
         val server = creds.auth()?.server.orEmpty()
-        buildPicker(feeds, counts).map { e ->
+        val entries = buildPicker(feeds, counts).map { e ->
             if (e is PickerEntry.Feed) e.copy(iconUrl = resolveIcon(server, e.iconUrl)) else e
         }
+        foldPicker(if (hide) hideEmpty(entries, selected) else entries, collapsed, selected)
     }
         .flowOn(work)
         .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(PickerEntry.All(0)))
@@ -193,6 +198,11 @@ class ListViewModel(
 
     fun refresh() = startRefresh(indicator = true)
 
+    /** Folds or unfolds a drawer folder; it stays that way across starts. */
+    fun toggleFolder(name: String) {
+        appScope.launch { settings.toggleCollapsed(name) }
+    }
+
     fun select(view: StreamId) {
         if (view == _view.value) {
             startRefresh(indicator = true)
@@ -210,17 +220,19 @@ class ListViewModel(
     }
 
     /**
-     * Marks the whole view read on the server, up to the newest row loaded, then refreshes.
-     * Items that arrived after that stay unread.
+     * Marks the whole view read on the server. The cutoff is the newest of the rows loaded and the
+     * unread items stored for the view, so it covers what the header counts, whether or not the
+     * list has caught up. With neither, it is now. Items that arrive later stay unread.
      */
     fun markAllRead() {
         val v = _view.value
-        // with nothing loaded there is no cutoff to mark up to
         val loaded = rows.value
-        if (loaded.isNullOrEmpty()) return
+        if (loaded.isNullOrEmpty() && count.value <= 0) return
         viewModelScope.launch {
-            val newest = loaded.maxOf { it.publishedSec }
-            queue.markAll(v, feedIdsOf(v, feedDao.feedsNow()), newest)
+            val feedIds = feedIdsOf(v, feedDao.feedsNow())
+            val newest = listOfNotNull(loaded?.maxOfOrNull { it.publishedSec }, itemDao.newestUnreadSec(feedIds)).maxOrNull()
+                ?: (clock() / 1000)
+            queue.markAll(v, feedIds, newest)
             // the refresh must see the mark-all in the queue
             queue.awaitApplied()
             startRefresh(indicator = true)
@@ -267,8 +279,15 @@ class ListViewModel(
     /** Where links open. */
     val linkTarget: Flow<LinkTarget> get() = settings.linkTarget
 
-    /** The feed's text for the sheet, read and converted off the main thread. Null when it sent none. */
-    suspend fun sheetText(id: String): AnnotatedString? = withContext(work) { htmlToAnnotated(itemDao.htmlOf(id)) }
+    /**
+     * What the sheet shows for an item, read and converted off the main thread. The text is null
+     * when the feed sent none; there is no image address when images are off.
+     */
+    suspend fun sheetBody(id: String, link: String?): SheetBody.Ready = withContext(work) {
+        val html = itemDao.htmlOf(id)
+        val image = if (settings.leadImages.first()) leadImageUrl(html, link) else null
+        SheetBody.Ready(htmlToAnnotated(html), image)
+    }
 
     /** Queued marks are sent by the flush job the app enqueues when it stops. */
     fun onBackground() {

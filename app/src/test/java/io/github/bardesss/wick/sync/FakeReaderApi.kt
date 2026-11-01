@@ -35,8 +35,8 @@ class FakeReaderApi : ReaderApi {
         feedList += Feed(id, "Feed $id", folder, null, null)
     }
 
-    fun addItem(id: String, feedId: String, publishedSec: Long, read: Boolean = false) {
-        serverItems[id] = Item(id, feedId, "Title $id", null, publishedSec, null)
+    fun addItem(id: String, feedId: String, publishedSec: Long, read: Boolean = false, html: String? = null, url: String? = null) {
+        serverItems[id] = Item(id, feedId, "Title $id", url, publishedSec, html)
         if (read) readIds += id else readIds -= id
     }
 

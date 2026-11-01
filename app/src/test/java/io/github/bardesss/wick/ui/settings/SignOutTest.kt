@@ -178,6 +178,17 @@ class SignOutTest {
     }
 
     @Test
+    fun wipe_unfolds_the_folders_for_the_next_account() = runTest(timeout = 30.seconds) {
+        seed()
+        val queue = db.newQueue(api, backgroundScope)
+        settings.toggleCollapsed("News")
+
+        wipeAccount(queue, db, settings) {}
+
+        assertEquals(emptySet<String>(), settings.collapsedFolders.first())
+    }
+
+    @Test
     fun sign_out_clears_credentials_even_when_the_wipe_fails() = runTest(timeout = 30.seconds) {
         val queue = db.newQueue(api, backgroundScope)
 

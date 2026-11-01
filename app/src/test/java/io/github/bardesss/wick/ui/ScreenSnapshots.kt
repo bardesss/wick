@@ -55,9 +55,11 @@ class ScreenSnapshots {
 
     private var shot: android.graphics.Bitmap? = null
 
-    private fun snap(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {
+    private fun snap(name: String, pillMs: Long = 0, content: @androidx.compose.runtime.Composable () -> Unit) {
         rule.setContent { WickTheme { content() } }
         rule.waitForIdle()
+        // a pill shows after a short delay
+        if (pillMs > 0) rule.mainClock.advanceTimeBy(pillMs)
         // captureToImage waits on a draw callback that never fires under Robolectric on this host, so draw the view directly.
         val view = rule.activity.window.decorView
         val bmp = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
@@ -269,14 +271,13 @@ class ScreenSnapshots {
         PickerEntry.Feed("feed/1", "Personal blog", null, 0, indented = false),
     )
 
-    private fun drawer(name: String, armed: Boolean) = snap(name) {
+    private fun drawer(name: String, armed: Boolean, entries: List<PickerEntry> = pickerEntries) = snap(name) {
         val arm = remember { MarkAllArm().also { if (armed) it.arm() } }
         PickerDrawer(
             state = rememberDrawerState(DrawerValue.Open),
-            entries = pickerEntries,
+            entries = entries,
             selected = StreamId.Feed("feed/2"),
             markCount = 52,
-            markEnabled = true,
             armed = arm.armed,
             animate = false,
             onSelect = {},
@@ -307,13 +308,44 @@ class ScreenSnapshots {
     fun drawer_armed() = drawer("drawer_armed", armed = true)
 
     @Test
+    fun drawer_folded() = drawer(
+        "drawer_folded",
+        armed = false,
+        entries = pickerEntries.filterNot { it is PickerEntry.Feed && it.id in setOf("feed/3", "feed/2", "feed/7") }
+            .map { if (it is PickerEntry.Folder && it.name == "Tech") it.copy(collapsed = true) else it },
+    )
+
+    @Test
+    fun list_pill() = snap("list_pill", pillMs = 1500) {
+        // the header counts 3 more than the 4 unread rows on screen
+        ListContent(
+            viewName = "All unread",
+            count = 7,
+            message = null,
+            rows = sample,
+            read = remember { mutableStateOf(setOf("1", "4", "6")) },
+            nowSec = now,
+            refreshing = false,
+            listState = rememberLazyListState(),
+            onRefresh = {},
+            onOpenPicker = {},
+            onOpen = {},
+            onFrame = { false },
+        )
+    }
+
+    @Test
     fun settings() = snap("settings") {
         SettingsScreen(
             oldestFirst = false,
+            hideEmpty = false,
+            leadImages = true,
             haptics = true,
             linkTarget = LinkTarget.InApp,
             server = "https://feeds.example.com",
             onOldestFirst = {},
+            onHideEmpty = {},
+            onLeadImages = {},
             onHaptics = {},
             onLinkTarget = {},
             onSignOut = {},

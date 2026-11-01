@@ -10,6 +10,8 @@ import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.data.CredentialStore
 import io.github.bardesss.wick.data.MemoryPreferences
 import io.github.bardesss.wick.data.SettingsStore
+import io.github.bardesss.wick.db.CountEntity
+import io.github.bardesss.wick.db.FeedEntity
 import io.github.bardesss.wick.db.ItemEntity
 import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.FakeReaderApi
@@ -464,6 +466,22 @@ class ListViewModelTest {
     }
 
     @Test
+    fun a_folded_folder_loses_its_feeds_in_the_picker_and_stays_folded() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.picker) { it.size > 1 }
+
+        vm.toggleFolder("News")
+        runCurrent()
+        val folded = settle(vm.picker) { list -> list.none { it is PickerEntry.Feed } }
+
+        assertEquals(PickerEntry.Folder("News", 2, collapsed = true), folded[1])
+        assertEquals(setOf("News"), settings.collapsedFolders.first())
+    }
+
+    @Test
     fun mark_all_with_nothing_loaded_does_nothing() = runTest(main, timeout = 30.seconds) {
         engine()
         val vm = vm()
@@ -474,9 +492,83 @@ class ListViewModelTest {
         vm.markAllRead()
         runCurrent()
 
-        assertFalse(settle(vm.canMarkAll) { it })
         assertTrue(api.markAllCalls.isEmpty())
         assertFalse(api.isRead("a"))
+    }
+
+    @Test
+    fun mark_all_works_from_the_count_when_the_list_has_no_rows() = runTest(main, timeout = 30.seconds) {
+        engine()
+        val vm = vm()
+        ids(vm, emptyList())
+        settle(vm.refreshing) { !it }
+        // sync stored an item the snapshot does not hold, so the header counts it
+        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null, null)))
+        db.feedDao().replaceCounts(listOf(CountEntity("feed/1", 1)))
+        db.itemDao().upsertKeepingLocal(listOf(ItemEntity("x", "feed/1", "T x", null, 150, null, read = false)))
+        assertEquals(1, settle(vm.count) { it == 1 })
+        assertTrue(vm.rows.value.isNullOrEmpty())
+
+        vm.markAllRead()
+        awaitMarkAll()
+
+        assertEquals(listOf(StreamId.All.raw to 151_000_000L), api.markAllCalls)
+    }
+
+    @Test
+    fun the_sheet_has_an_image_only_while_the_setting_is_on() = runTest(main, timeout = 30.seconds) {
+        engine()
+        api.addItem("a", "feed/1", 100, html = "<p>Text</p><img src=\"/pic.jpg\">", url = "https://e.x/post")
+        val vm = vm()
+        ids(vm, listOf("a"))
+
+        assertEquals("https://e.x/pic.jpg", vm.sheetBody("a", "https://e.x/post").imageUrl)
+
+        settings.setLeadImages(false)
+        val off = vm.sheetBody("a", "https://e.x/post")
+
+        assertNull(off.imageUrl)
+        assertEquals("Text", off.text?.text)
+    }
+
+    @Test
+    fun mark_all_covers_stored_unread_items_newer_than_the_rows() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.refreshing) { !it }
+        // sync stored an item the list has not picked up
+        db.itemDao().upsertKeepingLocal(listOf(ItemEntity("n", "feed/1", "T n", null, 300, null, read = false)))
+
+        vm.markAllRead()
+        awaitMarkAll()
+
+        assertEquals(listOf(StreamId.All.raw to 301_000_000L), api.markAllCalls)
+    }
+
+    @Test
+    fun mark_all_with_nothing_stored_uses_now() = runTest(main, timeout = 30.seconds) {
+        engine()
+        val vm = vm()
+        ids(vm, emptyList())
+        settle(vm.refreshing) { !it }
+        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null, null)))
+        db.feedDao().replaceCounts(listOf(CountEntity("feed/1", 4)))
+        assertEquals(4, settle(vm.count) { it == 4 })
+
+        vm.markAllRead()
+        awaitMarkAll()
+
+        assertEquals(listOf(StreamId.All.raw to (now / 1000 + 1) * 1_000_000), api.markAllCalls)
+    }
+
+    private suspend fun TestScope.awaitMarkAll() {
+        repeat(150) {
+            runCurrent()
+            if (api.markAllCalls.isNotEmpty()) return
+            withContext(Dispatchers.IO) { Thread.sleep(10) }
+        }
     }
 
     @Test

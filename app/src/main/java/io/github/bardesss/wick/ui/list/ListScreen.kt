@@ -1,6 +1,13 @@
 package io.github.bardesss.wick.ui.list
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
@@ -34,7 +41,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -55,11 +61,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -68,6 +73,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -79,6 +85,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
+import io.github.bardesss.wick.sync.MAX_ITEMS
 import io.github.bardesss.wick.ui.isWebUrl
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.picker.MarkAllArm
@@ -106,9 +113,30 @@ private val TapTarget = 48.dp
 private val MarkAllHeight = 32.dp
 private val MarkAllShape = RoundedCornerShape(18.dp)
 private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp)
-private val FOOTER_SLACK = 16.dp
+private val PillShape = RoundedCornerShape(16.dp)
+private val PillStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 13.sp)
 private const val ARM_TIMEOUT_MS = 4000L
+
+/** The gap must hold this long before the pill shows, since a row turns read a moment before the count drops. */
+const val PILL_DELAY_MS = 600L
+
+// the snapshot lands a moment after the refresh reports done
+private const val SETTLE_MS = 400L
 private const val FOOTER_KEY = 0
+
+/**
+ * How many unread items the header counts that the list does not show. Background sync moves the
+ * count; the list only changes on a refresh. A full snapshot ([snapshotRows] at the limit) cannot
+ * take more, and a refresh that did not close the gap leaves the count it ended on in
+ * [suppressedAt] until the count moves again; neither is worth offering a refresh for.
+ */
+fun newItems(count: Int, unreadRowsInSnapshot: Int, snapshotRows: Int = 0, suppressedAt: Int? = null): Int = when {
+    snapshotRows >= MAX_ITEMS || count == suppressedAt -> 0
+    else -> (count - unreadRowsInSnapshot).coerceAtLeast(0)
+}
+
+/** A refresh that left the gap no smaller than it found it, so another one would not help either. */
+fun refreshGainedNothing(gapBefore: Int, gapAfter: Int): Boolean = gapBefore > 0 && gapAfter >= gapBefore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,7 +150,6 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     val message by vm.message.collectAsStateWithLifecycle()
     val view by vm.view.collectAsStateWithLifecycle()
     val picker by vm.picker.collectAsStateWithLifecycle()
-    val canMarkAll by vm.canMarkAll.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val arm = remember { MarkAllArm() }
@@ -187,9 +214,9 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         entries = picker,
         selected = view,
         markCount = count,
-        markEnabled = canMarkAll,
         armed = arm.armed,
         animate = !reducedMotion,
+        onToggleFolder = vm::toggleFolder,
         onSelect = { v ->
             // a view switch must not leave an armed mark all to confirm against the new view
             arm.disarm()
@@ -197,7 +224,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
             scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
         },
         onMarkAll = {
-            if (arm.tap(canMarkAll && count > 0)) {
+            if (arm.tap(count > 0)) {
                 haptics.tick()
                 vm.markAllRead()
                 scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
@@ -219,10 +246,9 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         listState = listState,
         onRefresh = vm::refresh,
         onOpenPicker = { scope.launch { drawerState.show(open = true, animate = !reducedMotion) } },
-        canMarkAll = canMarkAll,
         markArmed = arm.armed,
         onMarkAll = {
-            if (arm.tap(canMarkAll && count > 0)) {
+            if (arm.tap(count > 0)) {
                 haptics.tick()
                 vm.markAllRead()
             }
@@ -249,7 +275,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     if (sheetRow != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val body by produceState<SheetBody>(SheetBody.Loading, sheetRow.id) {
-            value = SheetBody.Ready(vm.sheetText(sheetRow.id))
+            value = vm.sheetBody(sheetRow.id, sheetRow.url)
         }
         SummarySheet(
             row = sheetRow,
@@ -282,7 +308,6 @@ fun ListContent(
     onOpenPicker: () -> Unit,
     onOpen: (RowModel) -> Unit,
     onFrame: (ListFrame) -> Boolean,
-    canMarkAll: Boolean = true,
     markArmed: Boolean = false,
     onMarkAll: () -> Unit = {},
     onShowText: (RowModel) -> Unit = {},
@@ -290,8 +315,6 @@ fun ListContent(
     onSwipeTick: () -> Unit = {},
     reducedMotion: Boolean = false,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
-    /** The state behind the indicator of a pull that starts on the footer; a test can read it. */
-    footerPullState: PullToRefreshState = rememberPullToRefreshState(),
     /** Fixed sideways offsets in px by row id, for previews. */
     swipePreview: Map<String, Float> = emptyMap(),
 ) {
@@ -311,7 +334,7 @@ fun ListContent(
 
     Box(Modifier.fillMaxSize().background(WickColors.Night)) {
         Column(Modifier.fillMaxSize()) {
-            Header(viewName, count, animate = !reducedMotion, canMarkAll, markArmed, onMarkAll, onOpenPicker)
+            Header(viewName, count, animate = !reducedMotion, markArmed, onMarkAll, onOpenPicker)
             if (message != null) {
                 Text(
                     message,
@@ -321,48 +344,58 @@ fun ListContent(
                 )
             }
             val pull = rememberPullToRefreshState()
-            val rowCount by rememberUpdatedState(rows?.size ?: -1)
-            val refreshingNow by rememberUpdatedState(refreshing)
-            val refreshNow by rememberUpdatedState(onRefresh)
-            val pullScope = rememberCoroutineScope()
-            val density = LocalDensity.current
-            // a pull that starts on the footer has its own state and indicator, apart from the box's
-            var footerOwned by remember { mutableStateOf(false) }
-            val footerBusy = footerOwned && refreshing
-            LaunchedEffect(refreshing) { if (!refreshing) footerOwned = false }
-            LaunchedEffect(footerBusy) {
-                if (footerBusy) footerPullState.animateToThreshold() else if (!refreshingNow) footerPullState.animateToHidden()
+            val gap by remember(rows, count) {
+                derivedStateOf {
+                    if (rows == null) 0 else newItems(count, rows.count { it.id !in read.value }, rows.size)
+                }
             }
-            val footerPull = remember(listState, footerPullState) {
-                val slackPx = with(density) { FOOTER_SLACK.toPx() }
-                FooterPull(
-                    state = footerPullState,
-                    scope = pullScope,
-                    thresholdPx = with(density) { PullToRefreshDefaults.PositionalThreshold.toPx() },
-                    // the footer is the first item on screen and has hardly moved up
-                    active = {
-                        listState.firstVisibleItemIndex == rowCount &&
-                            listState.firstVisibleItemScrollOffset <= slackPx
-                    },
-                    refreshing = { refreshingNow },
-                    onRefresh = {
-                        footerOwned = true
-                        refreshNow()
-                    },
-                )
+            val gapNow by rememberUpdatedState(gap)
+            val countNow by rememberUpdatedState(count)
+            // a refresh that did not close the gap hides the pill until the count moves
+            var suppressedAt by remember { mutableStateOf<Int?>(null) }
+            var settling by remember { mutableStateOf(false) }
+            var gapBefore by remember { mutableIntStateOf(0) }
+            LaunchedEffect(refreshing) {
+                if (refreshing) {
+                    gapBefore = gapNow
+                    settling = true
+                } else if (settling) {
+                    delay(SETTLE_MS)
+                    if (refreshGainedNothing(gapBefore, gapNow)) suppressedAt = countNow
+                    settling = false
+                }
             }
-            // the footer pull sits above the box, so it sees every drag and fling first
-            Box(Modifier.fillMaxSize().nestedScroll(footerPull)) {
+            LaunchedEffect(count) { if (suppressedAt != count) suppressedAt = null }
+            val newCount = if (suppressedAt == count) 0 else gap
+            // the pill shows once the gap has held for a moment while the list is still, and goes at once
+            val scrolling = listState.isScrollInProgress
+            val busy = refreshing || settling
+            var pillShown by remember { mutableStateOf(false) }
+            LaunchedEffect(newCount > 0, scrolling, busy) {
+                if (newCount <= 0) {
+                    pillShown = false
+                } else if (!pillShown && !scrolling && !busy) {
+                    delay(PILL_DELAY_MS)
+                    pillShown = true
+                }
+            }
+            // the pill keeps its place while a refresh runs, so the list does not move until the new snapshot is in
+            val pillCount = remember { intArrayOf(0) }
+            if (newCount > 0) pillCount[0] = newCount
+            AnimatedVisibility(
+                visible = pillShown,
+                enter = if (reducedMotion) EnterTransition.None else fadeIn(tween(120)) + expandVertically(tween(160)),
+                exit = if (reducedMotion) ExitTransition.None else fadeOut(tween(120)) + shrinkVertically(tween(160)),
+            ) {
+                NewItemsPill(pillCount[0], enabled = !busy, onClick = onRefresh)
+            }
             PullToRefreshBox(
                 isRefreshing = refreshing,
-                onRefresh = {
-                    footerOwned = false
-                    onRefresh()
-                },
+                onRefresh = onRefresh,
                 state = pull,
                 modifier = Modifier.fillMaxSize(),
                 indicator = {
-                    if (!footerBusy) PullToRefreshDefaults.Indicator(
+                    PullToRefreshDefaults.Indicator(
                         state = pull,
                         isRefreshing = refreshing,
                         containerColor = WickColors.Raised,
@@ -410,18 +443,10 @@ fun ListContent(
                             }
                         }
                         item(key = FOOTER_KEY, contentType = "caught_up") {
-                            CaughtUp(Modifier.height(footerHeight))
+                            CaughtUp(onRefresh = onRefresh, refreshing = refreshing, modifier = Modifier.height(footerHeight))
                         }
                     }
                 }
-            }
-            PullToRefreshDefaults.Indicator(
-                state = footerPullState,
-                isRefreshing = footerBusy,
-                containerColor = WickColors.Raised,
-                color = WickColors.Amber,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
             }
         }
         SnackbarHost(
@@ -443,12 +468,38 @@ fun ListContent(
     }
 }
 
+/** Says that the header counts items the list does not show; a tap refreshes. Unseen and inert while that runs. */
+@Composable
+private fun NewItemsPill(count: Int, enabled: Boolean, onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0f), contentAlignment = Alignment.Center) {
+        // the pill is smaller than a finger, so the tap target around it is 48dp
+        Box(
+            Modifier
+                .heightIn(min = TapTarget)
+                .widthIn(min = TapTarget)
+                .semantics { role = Role.Button }
+                .clickable(enabled = enabled, onClick = onClick)
+                .testTag("new_items"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                pluralStringResource(R.plurals.list_new_items, count, count),
+                style = PillStyle,
+                color = WickColors.Amber,
+                maxLines = 1,
+                modifier = Modifier
+                    .background(WickColors.Raised, PillShape)
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun Header(
     name: String,
     count: Int,
     animate: Boolean,
-    canMarkAll: Boolean,
     markArmed: Boolean,
     onMarkAll: () -> Unit,
     onClick: () -> Unit,
@@ -499,7 +550,7 @@ private fun Header(
             Spacer(Modifier.width(10.dp))
             Text(count.toString(), style = CountStyle, color = countColor, modifier = Modifier.alignByBaseline())
         }
-        if (count > 0 && canMarkAll) {
+        if (count > 0) {
             Spacer(Modifier.width(4.dp))
             MarkAll(count, markArmed, animate, onMarkAll)
         }

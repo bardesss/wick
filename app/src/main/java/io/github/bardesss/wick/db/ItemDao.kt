@@ -35,6 +35,12 @@ abstract class ItemDao {
     @Query("UPDATE ItemEntity SET read = :read, manualUnread = :manualUnread WHERE id = :id")
     abstract suspend fun setRead(id: String, read: Boolean, manualUnread: Boolean)
 
+    @Query("SELECT MAX(publishedSec) FROM ItemEntity WHERE read = 0")
+    protected abstract suspend fun newestUnreadAll(): Long?
+
+    @Query("SELECT MAX(publishedSec) FROM ItemEntity WHERE read = 0 AND feedId IN (:feedIds)")
+    protected abstract suspend fun newestUnreadIn(feedIds: List<String>): Long?
+
     @Query("UPDATE ItemEntity SET read = 1, manualUnread = 0 WHERE publishedSec <= :cutoff")
     protected abstract suspend fun markAllReadUpTo(cutoff: Long)
 
@@ -130,6 +136,10 @@ abstract class ItemDao {
     open suspend fun pruneReadNotIn(keep: Set<String>) {
         prunable().filter { it !in keep }.chunked(CHUNK).forEach { deleteByIds(it) }
     }
+
+    /** The publish time of the newest unread item of [feedIds] (all feeds when null), or null when none. */
+    open suspend fun newestUnreadSec(feedIds: List<String>?): Long? =
+        if (feedIds == null) newestUnreadAll() else feedIds.chunked(CHUNK).mapNotNull { newestUnreadIn(it) }.maxOrNull()
 
     open suspend fun unreadIds(feedIds: List<String>?, oldestFirst: Boolean): List<String> =
         if (feedIds == null) unreadAll(oldestFirst) else unreadIn(feedIds, oldestFirst)

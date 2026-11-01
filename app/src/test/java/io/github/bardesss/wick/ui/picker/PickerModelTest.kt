@@ -65,6 +65,89 @@ class PickerModelTest {
     }
 
     @Test
+    fun collapsed_folders_keep_their_row_and_lose_their_feeds() {
+        val entries = buildPicker(feeds, mapOf("feed/2" to 3, StreamId.Folder("Tech").raw to 3))
+
+        val folded = foldPicker(entries, setOf("Tech"))
+
+        assertTrue(PickerEntry.Folder("Tech", 3, collapsed = true) in folded)
+        assertTrue(folded.filterIsInstance<PickerEntry.Feed>().none { it.id == "feed/2" || it.id == "feed/3" })
+        // other folders and the loose feeds stay
+        assertTrue(folded.any { it is PickerEntry.Feed && it.id == "feed/4" })
+        assertTrue(folded.any { it is PickerEntry.Feed && it.id == "feed/1" && !it.indented })
+        assertEquals(entries.size - 2, folded.size)
+    }
+
+    private val withCounts = buildPicker(
+        feeds,
+        mapOf(
+            StreamId.All.raw to 8,
+            StreamId.Folder("Tech").raw to 8,
+            "feed/2" to 8,
+            "feed/5" to 0,
+        ),
+    )
+
+    private fun names(list: List<PickerEntry>) = list.map {
+        when (it) {
+            is PickerEntry.All -> "all"
+            is PickerEntry.Folder -> "folder:" + it.name
+            is PickerEntry.Feed -> it.id
+        }
+    }
+
+    @Test
+    fun hiding_drops_feeds_and_folders_with_nothing_unread() {
+        val shown = hideEmpty(withCounts, StreamId.All)
+
+        assertEquals(listOf("all", "folder:Tech", "feed/2"), names(shown))
+    }
+
+    @Test
+    fun hiding_keeps_the_selected_feed() {
+        val shown = hideEmpty(withCounts, StreamId.Feed("feed/5"))
+
+        assertEquals(listOf("all", "folder:Tech", "feed/2", "feed/5"), names(shown))
+    }
+
+    @Test
+    fun hiding_keeps_the_selected_folder_and_the_folder_of_a_selected_feed() {
+        assertEquals(
+            listOf("all", "folder:Food", "folder:Tech", "feed/2"),
+            names(hideEmpty(withCounts, StreamId.Folder("Food"))),
+        )
+        assertEquals(
+            listOf("all", "folder:Food", "feed/6", "folder:Tech", "feed/2"),
+            names(hideEmpty(withCounts, StreamId.Feed("feed/6"))),
+        )
+    }
+
+    @Test
+    fun hiding_keeps_all_unread_when_nothing_is_unread() {
+        assertEquals(listOf("all"), names(hideEmpty(buildPicker(feeds, emptyMap()), StreamId.All)))
+    }
+
+    @Test
+    fun the_folder_of_the_selected_feed_stays_open() {
+        val entries = buildPicker(feeds, mapOf("feed/2" to 3, StreamId.Folder("Tech").raw to 3))
+
+        val folded = foldPicker(entries, setOf("Tech", "Food"), StreamId.Feed("feed/2"))
+
+        assertTrue(PickerEntry.Folder("Tech", 3) in folded)
+        assertTrue(folded.any { it is PickerEntry.Feed && it.id == "feed/2" })
+        // another folder stays folded, and so does Tech when the folder itself is the view
+        assertTrue(PickerEntry.Folder("Food", 0, collapsed = true) in folded)
+        assertTrue(PickerEntry.Folder("Tech", 3, collapsed = true) in foldPicker(entries, setOf("Tech"), StreamId.Folder("Tech")))
+    }
+
+    @Test
+    fun nothing_collapsed_leaves_the_list_alone() {
+        val entries = buildPicker(feeds, emptyMap())
+
+        assertEquals(entries, foldPicker(entries, emptySet()))
+    }
+
+    @Test
     fun tap_arms_first_and_marks_on_the_second() {
         val arm = MarkAllArm()
         assertFalse(arm.tap(canMark = true))

@@ -18,7 +18,26 @@ class SettingsStoreTest {
         val s = store()
         assertFalse(s.oldestFirst.first())
         assertTrue(s.haptics.first())
+        assertFalse(s.hideEmpty.first())
+        assertTrue(s.leadImages.first())
         assertEquals(LinkTarget.InApp, s.linkTarget.first())
+    }
+
+    @Test
+    fun folder_folding_toggles_and_persists() = runBlocking {
+        val ds = MemoryPreferences()
+        val s = SettingsStore(ds)
+        assertEquals(emptySet<String>(), s.collapsedFolders.first())
+
+        s.toggleCollapsed("Tech")
+        s.toggleCollapsed("Food")
+        assertEquals(setOf("Tech", "Food"), SettingsStore(ds).collapsedFolders.first())
+
+        s.toggleCollapsed("Tech")
+        assertEquals(setOf("Food"), SettingsStore(ds).collapsedFolders.first())
+
+        s.clearCollapsed()
+        assertEquals(emptySet<String>(), s.collapsedFolders.first())
     }
 
     @Test

@@ -112,6 +112,10 @@ fun WickNav(container: AppContainer) {
 private fun SettingsRoute(container: AppContainer, server: String, onSignOut: () -> Unit) {
     val oldestFirst by remember { container.settings.oldestFirst.map<Boolean, Boolean?> { it } }
         .collectAsStateWithLifecycle(initialValue = null)
+    val hideEmpty by remember { container.settings.hideEmpty.map<Boolean, Boolean?> { it } }
+        .collectAsStateWithLifecycle(initialValue = null)
+    val leadImages by remember { container.settings.leadImages.map<Boolean, Boolean?> { it } }
+        .collectAsStateWithLifecycle(initialValue = null)
     val haptics by remember { container.settings.haptics.map<Boolean, Boolean?> { it } }
         .collectAsStateWithLifecycle(initialValue = null)
     val linkTarget by remember { container.settings.linkTarget.map<LinkTarget, LinkTarget?> { it } }
@@ -120,10 +124,14 @@ private fun SettingsRoute(container: AppContainer, server: String, onSignOut: ()
     val scope = container.appScope
     SettingsScreen(
         oldestFirst = oldestFirst,
+        hideEmpty = hideEmpty,
+        leadImages = leadImages,
         haptics = haptics,
         linkTarget = linkTarget,
         server = server,
         onOldestFirst = { scope.launch { container.settings.setOldestFirst(it) } },
+        onHideEmpty = { scope.launch { container.settings.setHideEmpty(it) } },
+        onLeadImages = { scope.launch { container.settings.setLeadImages(it) } },
         onHaptics = { scope.launch { container.settings.setHaptics(it) } },
         onLinkTarget = { scope.launch { container.settings.setLinkTarget(it) } },
         onSignOut = onSignOut,

@@ -1,6 +1,7 @@
 package io.github.bardesss.wick.ui.picker
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,12 +15,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
@@ -29,11 +33,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -54,6 +63,7 @@ private val Scrim = Color(0x99040608)
 private val FeedText = Color(0xFFB7BEC6)
 private val IdleBorder = Color(0xFF3A3226)
 private val ButtonShape = RoundedCornerShape(14.dp)
+private val ChevronGutter = 32.dp
 
 private val AllStyle = TextStyle(fontFamily = Newsreader, fontWeight = FontWeight.Normal, fontSize = 20.sp)
 private val FolderStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 15.sp)
@@ -81,12 +91,12 @@ fun PickerDrawer(
     entries: List<PickerEntry>,
     selected: StreamId,
     markCount: Int,
-    markEnabled: Boolean,
     armed: Boolean,
     animate: Boolean,
     onSelect: (StreamId) -> Unit,
     onMarkAll: () -> Unit,
     onSettings: () -> Unit,
+    onToggleFolder: (String) -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val width = LocalConfiguration.current.screenWidthDp.dp * DRAWER_WIDTH
@@ -99,7 +109,7 @@ fun PickerDrawer(
                 drawerContentColor = WickColors.Paper,
                 drawerTonalElevation = 0.dp,
             ) {
-                DrawerBody(entries, selected, markCount, markEnabled, armed, animate, onSelect, onMarkAll, onSettings)
+                DrawerBody(entries, selected, markCount, armed, animate, onSelect, onMarkAll, onSettings, onToggleFolder)
             }
         },
         drawerState = state,
@@ -114,21 +124,23 @@ private fun DrawerBody(
     entries: List<PickerEntry>,
     selected: StreamId,
     markCount: Int,
-    markEnabled: Boolean,
     armed: Boolean,
     animate: Boolean,
     onSelect: (StreamId) -> Unit,
     onMarkAll: () -> Unit,
     onSettings: () -> Unit,
+    onToggleFolder: (String) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(top = 28.dp, bottom = 8.dp)) {
             items(entries, key = { it.key() }, contentType = { it::class }) { entry ->
-                EntryRow(entry, entry.isSelected(selected)) { onSelect(entry.stream()) }
+                // the feeds of a folder slide in and out, unless motion is reduced
+                val move = if (animate) Modifier.animateItem() else Modifier
+                EntryRow(entry, entry.isSelected(selected), animate, move, onToggleFolder) { onSelect(entry.stream()) }
             }
         }
         Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 12.dp, bottom = 12.dp)) {
-            MarkAllButton(markCount, markEnabled && markCount > 0, armed, animate, onMarkAll)
+            MarkAllButton(markCount, markCount > 0, armed, animate, onMarkAll)
             Text(
                 stringResource(R.string.settings),
                 style = LinkStyle,
@@ -144,42 +156,87 @@ private fun DrawerBody(
 }
 
 @Composable
-private fun EntryRow(entry: PickerEntry, selected: Boolean, onClick: () -> Unit) {
+private fun EntryRow(
+    entry: PickerEntry,
+    selected: Boolean,
+    animate: Boolean,
+    modifier: Modifier,
+    onToggleFolder: (String) -> Unit,
+    onClick: () -> Unit,
+) {
     val countColor = when {
         selected -> WickColors.Amber
         entry.count == 0 -> WickColors.Faded
         else -> WickColors.Meta
     }
-    val start = if (entry is PickerEntry.Feed && entry.indented) 40.dp else 22.dp
-    val top = if (entry is PickerEntry.Folder) 10.dp else 0.dp
+    val folder = entry as? PickerEntry.Folder
+    // a folder's chevron sits in the gutter before its name, so its name lines up with the feeds under it
+    val start = when {
+        folder != null -> ChevronGutter
+        entry is PickerEntry.Feed && entry.indented -> 40.dp
+        else -> 22.dp
+    }
+    val top = if (folder != null) 10.dp else 0.dp
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .padding(top = top)
-            .semantics { this.selected = selected }
-            .clickable(onClick = onClick)
-            .padding(start = start, end = 22.dp, top = 11.dp, bottom = 11.dp),
+            .padding(top = top),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val (label, style, color) = when (entry) {
-            is PickerEntry.All -> Triple(stringResource(R.string.list_all_unread), AllStyle, WickColors.Paper)
-            is PickerEntry.Folder -> Triple(entry.name, FolderStyle, WickColors.Paper)
-            is PickerEntry.Feed -> Triple(entry.title, FeedStyle, FeedText)
-        }
-        if (entry is PickerEntry.Feed) {
-            Favicon(entry.iconUrl, entry.title, faded = false, tile = WickColors.Night)
+        if (folder != null) FolderChevron(folder, animate) { onToggleFolder(folder.name) }
+        Row(
+            Modifier
+                .weight(1f)
+                .semantics { this.selected = selected }
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(start = if (folder != null) 8.dp else start, end = 22.dp, top = 11.dp, bottom = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val (label, style, color) = when (entry) {
+                is PickerEntry.All -> Triple(stringResource(R.string.list_all_unread), AllStyle, WickColors.Paper)
+                is PickerEntry.Folder -> Triple(entry.name, FolderStyle, WickColors.Paper)
+                is PickerEntry.Feed -> Triple(entry.title, FeedStyle, FeedText)
+            }
+            if (entry is PickerEntry.Feed) {
+                Favicon(entry.iconUrl, entry.title, faded = false, tile = WickColors.Night)
+                Spacer(Modifier.width(12.dp))
+            }
+            Text(
+                label,
+                style = style,
+                color = if (selected) WickColors.Amber else color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
             Spacer(Modifier.width(12.dp))
+            Text(entry.count.toString(), style = CountStyle, color = countColor)
         }
-        Text(
-            label,
-            style = style,
-            color = if (selected) WickColors.Amber else color,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(entry.count.toString(), style = CountStyle, color = countColor)
+    }
+}
+
+@Composable
+private fun FolderChevron(folder: PickerEntry.Folder, animate: Boolean, onClick: () -> Unit) {
+    val target = if (folder.collapsed) -90f else 0f
+    val turned by animateFloatAsState(target, tween(200), label = "chevron")
+    val label = stringResource(if (folder.collapsed) R.string.picker_expand else R.string.picker_collapse, folder.name)
+    // the tap target is 48dp, wider than the gutter, so it reaches over the start of the name; it stays on top
+    Box(Modifier.width(ChevronGutter).zIndex(1f)) {
+        Box(
+            Modifier
+                .requiredSize(48.dp)
+                .semantics { role = Role.Button; contentDescription = label }
+                .clickable(onClick = onClick)
+                .testTag("folder_chevron"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_chevron_down),
+                contentDescription = null,
+                tint = WickColors.Meta,
+                modifier = Modifier.size(18.dp).rotate(if (animate) turned else target),
+            )
+        }
     }
 }
 

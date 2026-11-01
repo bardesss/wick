@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import io.github.bardesss.wick.api.LEGACY_API_PATH
 import kotlinx.coroutines.flow.Flow
@@ -22,7 +23,16 @@ class SettingsStore(private val store: DataStore<Preferences>) {
     private val oldestFirstKey = booleanPreferencesKey("oldest_first")
     private val hapticsKey = booleanPreferencesKey("haptics")
 
+    private val leadImagesKey = booleanPreferencesKey("lead_images")
+    private val hideEmptyKey = booleanPreferencesKey("hide_empty")
+
     val oldestFirst: Flow<Boolean> = store.data.map { it[oldestFirstKey] ?: false }
+
+    /** Whether the summary sheet loads the article's first image. */
+    val leadImages: Flow<Boolean> = store.data.map { it[leadImagesKey] ?: true }
+
+    /** Whether the drawer leaves out feeds and folders with nothing unread. */
+    val hideEmpty: Flow<Boolean> = store.data.map { it[hideEmptyKey] ?: false }
     val haptics: Flow<Boolean> = store.data.map { it[hapticsKey] ?: true }
 
     private val linkTargetKey = stringPreferencesKey("link_target")
@@ -39,8 +49,32 @@ class SettingsStore(private val store: DataStore<Preferences>) {
         store.edit { it[oldestFirstKey] = value }
     }
 
+    suspend fun setLeadImages(value: Boolean) {
+        store.edit { it[leadImagesKey] = value }
+    }
+
+    suspend fun setHideEmpty(value: Boolean) {
+        store.edit { it[hideEmptyKey] = value }
+    }
+
     suspend fun setHaptics(value: Boolean) {
         store.edit { it[hapticsKey] = value }
+    }
+
+    private val collapsedKey = stringSetPreferencesKey("collapsed_folders")
+
+    /** Names of the drawer folders whose feeds are folded away. */
+    val collapsedFolders: Flow<Set<String>> = store.data.map { it[collapsedKey] ?: emptySet() }
+
+    suspend fun toggleCollapsed(folder: String) {
+        store.edit {
+            val now = it[collapsedKey] ?: emptySet()
+            it[collapsedKey] = if (folder in now) now - folder else now + folder
+        }
+    }
+
+    suspend fun clearCollapsed() {
+        store.edit { it.remove(collapsedKey) }
     }
 
     private val accountKey = stringPreferencesKey("account")
