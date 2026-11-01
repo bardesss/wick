@@ -22,7 +22,7 @@ class GReaderApiTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        api = GReaderApi(OkHttpClient()) { Auth(server.url("/").toString(), "u/k") }
+        api = GReaderApi(OkHttpClient()) { Auth(serverUrl(), "u/k") }
     }
 
     @After
@@ -30,7 +30,7 @@ class GReaderApiTest {
         runCatching { server.shutdown() }
     }
 
-    private fun serverUrl() = server.url("/").toString()
+    private fun serverUrl() = server.url("/").toString().trimEnd('/') + base
 
     private fun expectError(expected: ApiError, block: suspend () -> Unit) {
         try {
@@ -51,6 +51,22 @@ class GReaderApiTest {
         val body = req.body.readUtf8()
         assertTrue(body, body.contains("Email=u"))
         assertTrue(body, body.contains("Passwd=k"))
+    }
+
+    @Test
+    fun login_and_stream_urls_are_built_under_the_api_url() {
+        for (prefix in listOf("/api/greader.php", "")) {
+            val auth = Auth(server.url("/").toString().trimEnd('/') + prefix, "u/k")
+            val client = GReaderApi(OkHttpClient()) { auth }
+            server.enqueue(MockResponse().setBody("Auth=u/k"))
+            server.enqueue(MockResponse().setBody("""{"subscriptions":[]}"""))
+            runBlocking {
+                client.login(auth.server + "/", "u", "k")
+                client.feeds()
+            }
+            assertEquals("$prefix/accounts/ClientLogin", server.takeRequest().path)
+            assertEquals("$prefix/reader/api/0/subscription/list?output=json", server.takeRequest().path)
+        }
     }
 
     @Test

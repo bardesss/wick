@@ -1,8 +1,12 @@
 package io.github.bardesss.wick.data
 
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -14,6 +18,17 @@ class SettingsStoreTest {
         val s = store()
         assertFalse(s.oldestFirst.first())
         assertTrue(s.haptics.first())
+    }
+
+    @Test
+    fun v010_account_gets_the_api_path_once() = runBlocking {
+        val ds = MemoryPreferences()
+        ds.edit { it[stringPreferencesKey("account")] = "https://feeds.example.com\nme" }
+        val s = SettingsStore(ds)
+        assertEquals("https://feeds.example.com/rest/googlereader\nme", s.account())
+        assertEquals("https://feeds.example.com/rest/googlereader\nme", SettingsStore(ds).account())
+        s.setAccount(null)
+        assertNull(s.account())
     }
 
     @Test

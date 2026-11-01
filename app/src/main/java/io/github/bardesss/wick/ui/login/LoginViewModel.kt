@@ -21,7 +21,7 @@ object LoginMessages {
     const val BAD_CREDENTIALS = "Username or API key is wrong"
     const val NO_API = "No Google Reader API at this address"
     const val STORAGE = "Couldn't store the sign in on this device"
-    const val BAD_ADDRESS = "That server address doesn't look right"
+    const val BAD_ADDRESS = "That address doesn't look right"
     fun http(code: Int) = "The server answered with error $code"
 
     fun of(e: ApiError) = when (e) {
@@ -34,19 +34,20 @@ object LoginMessages {
 
 private val scheme = Regex("^[A-Za-z][A-Za-z0-9+.-]*://")
 
-/** Trims, defaults to https, drops trailing slashes and a pasted API path. */
-fun normaliseServer(raw: String): String {
-    var s = raw.trim()
-    if (!scheme.containsMatchIn(s)) s = "https://$s"
-    s = s.trimEnd('/')
-    if (s.endsWith("/rest/googlereader", ignoreCase = true)) {
-        s = s.dropLast("/rest/googlereader".length).trimEnd('/')
-    }
-    return s
+/** Trims, defaults to https and drops trailing slashes. The path stays, it is part of the API URL. */
+fun normaliseApiUrl(raw: String): String {
+    val s = raw.trim()
+    return (if (scheme.containsMatchIn(s)) s else "https://$s").trimEnd('/')
 }
 
+private val fallbackPaths = listOf("/rest/googlereader", "/api/greader.php")
+
+/** The URL as entered, then the known API paths appended to it unless it already ends with one. */
+fun loginCandidates(apiUrl: String): List<String> =
+    listOf(apiUrl) + fallbackPaths.filterNot { apiUrl.endsWith(it, ignoreCase = true) }.map { apiUrl + it }
+
 /** Names the account a sign in is for, to tell a new key for the same account from another account. */
-fun accountId(server: String, user: String): String = normaliseServer(server).lowercase() + "\n" + user.trim()
+fun accountId(server: String, user: String): String = normaliseApiUrl(server).lowercase() + "\n" + user.trim()
 
 class LoginViewModel(
     private val api: ReaderApi,
@@ -62,10 +63,11 @@ class LoginViewModel(
         if (_state.value.busy) return
         if (server.isBlank() || user.isBlank() || key.isBlank()) return
         _state.value = LoginState(busy = true)
-        val base = normaliseServer(server)
+        val entered = normaliseApiUrl(server)
         viewModelScope.launch {
+            var base = entered
             val token = try {
-                api.login(base, user.trim(), key.trim())
+                login(entered, user.trim(), key.trim()) { base = it }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
@@ -85,6 +87,20 @@ class LoginViewModel(
                 _state.value = LoginState(error = LoginMessages.STORAGE)
             }
         }
+    }
+
+    /** Signs in at [apiUrl], and where that answers 404 at the same URL with a known API path added. */
+    private suspend fun login(apiUrl: String, user: String, key: String, worked: (String) -> Unit): String {
+        for (candidate in loginCandidates(apiUrl)) {
+            try {
+                val token = api.login(candidate, user, key)
+                worked(candidate)
+                return token
+            } catch (e: ApiError.NoGReaderApi) {
+                // only a 404 moves on to the next path
+            }
+        }
+        throw ApiError.NoGReaderApi
     }
 
     companion object {
