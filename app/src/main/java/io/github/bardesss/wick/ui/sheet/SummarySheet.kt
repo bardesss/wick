@@ -82,11 +82,9 @@ fun SummarySheet(
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val maxHeight = with(LocalDensity.current) { (LocalWindowInfo.current.containerSize.height * MAX_HEIGHT).toDp() }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        modifier = Modifier.heightIn(max = maxHeight),
         shape = SheetShape,
         containerColor = WickColors.Raised,
         contentColor = WickColors.Paper,
@@ -104,13 +102,15 @@ fun SummarySheet(
 @Composable
 private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, onOpen: () -> Unit) {
     val context = LocalContext.current
+    val maxHeight = with(LocalDensity.current) { (LocalWindowInfo.current.containerSize.height * MAX_HEIGHT).toDp() }
     // links in the text open the same way as the list does
     val links = remember(context) {
         object : UriHandler {
             override fun openUri(uri: String) = openLink(context, uri)
         }
     }
-    Column(Modifier.fillMaxWidth()) {
+    // the cap sits on the content; a height limit on the sheet itself throws off its anchors
+    Column(Modifier.fillMaxWidth().heightIn(max = maxHeight)) {
         Column(
             Modifier
                 .weight(1f, fill = false)

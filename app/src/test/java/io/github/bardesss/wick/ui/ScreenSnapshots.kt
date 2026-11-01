@@ -18,6 +18,9 @@ import io.github.bardesss.wick.ui.login.LoginMessages
 import io.github.bardesss.wick.ui.login.LoginState
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickTheme
+import androidx.compose.ui.graphics.toArgb
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -49,6 +52,8 @@ class ScreenSnapshots {
     @get:Rule
     val rule = createAndroidComposeRule<ComponentActivity>()
 
+    private var shot: android.graphics.Bitmap? = null
+
     private fun snap(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {
         rule.setContent { WickTheme { content() } }
         rule.waitForIdle()
@@ -67,6 +72,7 @@ class ScreenSnapshots {
         assertTrue(bmp.width > 0 && bmp.height > 0)
         val dir = File("build/snapshots").apply { mkdirs() }
         File(dir, "$name.png").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        shot = bmp
     }
 
     @Test
@@ -165,7 +171,18 @@ class ScreenSnapshots {
     """.trimIndent()
 
     @OptIn(ExperimentalMaterial3Api::class)
-    private fun sheet(name: String, html: String?) = snap(name) {
+    private fun sheet(name: String, html: String?) {
+        snap(name) { SheetScreen(html) }
+        // the sheet sits on the bottom edge, and a long text stops short of the top
+        val bmp = shot!!
+        val raised = WickColors.Raised.toArgb()
+        assertEquals(raised, bmp.getPixel(bmp.width / 2, bmp.height - 1))
+        assertNotEquals(raised, bmp.getPixel(bmp.width / 2, bmp.height / 10))
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @androidx.compose.runtime.Composable
+    private fun SheetScreen(html: String?) {
         ListContent(
             viewName = "All unread",
             count = 87,
@@ -195,6 +212,9 @@ class ScreenSnapshots {
 
     @Test
     fun sheet_empty() = sheet("sheet_empty", null)
+
+    @Test
+    fun sheet_long() = sheet("sheet_long", article.repeat(6))
 
     @Test
     fun list_caught_up() = snap("list_caught_up") {
