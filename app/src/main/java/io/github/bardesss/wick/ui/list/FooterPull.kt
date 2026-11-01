@@ -54,10 +54,8 @@ class FooterPull(
         val reached = distance >= thresholdPx
         pulling = false
         distance = 0f
-        // while a refresh runs the indicator belongs to it
-        if (!refreshing()) {
-            if (reached) onRefresh() else scope.launch { state.animateToHidden() }
-        }
+        // a refresh that started elsewhere has its own indicator, so this one goes away
+        if (reached && !refreshing()) onRefresh() else scope.launch { state.animateToHidden() }
         return available
     }
 
