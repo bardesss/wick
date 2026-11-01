@@ -1,12 +1,20 @@
 package io.github.bardesss.wick.format
 
-/** Short age like "12m", "3h" or "2d"; "now" under a minute and for times in the future. */
-fun formatAge(nowSec: Long, thenSec: Long): String {
+/** How long ago something was published, in the largest whole unit; the screen words it. */
+sealed interface Age {
+    /** Under a minute, or a time in the future. */
+    data object Now : Age
+    data class Minutes(val n: Long) : Age
+    data class Hours(val n: Long) : Age
+    data class Days(val n: Long) : Age
+}
+
+fun ageOf(nowSec: Long, thenSec: Long): Age {
     val s = nowSec - thenSec
     return when {
-        s < 60 -> "now"
-        s < 3_600 -> "${s / 60}m"
-        s < 86_400 -> "${s / 3_600}h"
-        else -> "${s / 86_400}d"
+        s < 60 -> Age.Now
+        s < 3_600 -> Age.Minutes(s / 60)
+        s < 86_400 -> Age.Hours(s / 3_600)
+        else -> Age.Days(s / 86_400)
     }
 }

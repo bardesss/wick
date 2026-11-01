@@ -70,6 +70,8 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
@@ -479,7 +481,14 @@ fun ListContent(
 /** Says that the header counts items the list does not show; a tap refreshes. Unseen and inert while that runs. */
 @Composable
 private fun NewItemsPill(count: Int, enabled: Boolean, onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0f), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0f)
+            // unseen is not enough, a screen reader would still find it
+            .then(if (enabled) Modifier else Modifier.semantics { hideFromAccessibility() }),
+        contentAlignment = Alignment.Center,
+    ) {
         // the pill is smaller than a finger, so the tap target around it is 48dp
         Box(
             Modifier
@@ -553,7 +562,7 @@ private fun Header(
                 color = WickColors.Paper,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.alignByBaseline().weight(1f, fill = false),
+                modifier = Modifier.alignByBaseline().weight(1f, fill = false).semantics { heading() },
             )
             Spacer(Modifier.width(10.dp))
             Text(count.toString(), style = CountStyle, color = countColor, modifier = Modifier.alignByBaseline())

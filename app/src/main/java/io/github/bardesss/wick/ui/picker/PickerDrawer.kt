@@ -59,8 +59,6 @@ import io.github.bardesss.wick.ui.theme.Newsreader
 import io.github.bardesss.wick.ui.theme.WickColors
 
 private const val DRAWER_WIDTH = 0.84f
-private val Scrim = Color(0x99040608)
-private val FeedText = Color(0xFFB7BEC6)
 private val IdleBorder = Color(0xFF3A3226)
 private val ButtonShape = RoundedCornerShape(14.dp)
 private val ChevronGutter = 32.dp
@@ -114,7 +112,7 @@ fun PickerDrawer(
         },
         drawerState = state,
         gesturesEnabled = true,
-        scrimColor = Scrim,
+        scrimColor = WickColors.Scrim,
         content = content,
     )
 }
@@ -195,7 +193,7 @@ private fun EntryRow(
             val (label, style, color) = when (entry) {
                 is PickerEntry.All -> Triple(stringResource(R.string.list_all_unread), AllStyle, WickColors.Paper)
                 is PickerEntry.Folder -> Triple(entry.name, FolderStyle, WickColors.Paper)
-                is PickerEntry.Feed -> Triple(entry.title, FeedStyle, FeedText)
+                is PickerEntry.Feed -> Triple(entry.title, FeedStyle, WickColors.Muted)
             }
             if (entry is PickerEntry.Feed) {
                 Favicon(entry.iconUrl, entry.title, faded = false, tile = WickColors.Night)

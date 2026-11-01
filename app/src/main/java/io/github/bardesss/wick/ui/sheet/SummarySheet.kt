@@ -32,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -41,6 +40,8 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -53,9 +54,12 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
-import io.github.bardesss.wick.format.formatAge
+import io.github.bardesss.wick.format.Age
+import io.github.bardesss.wick.format.ageOf
 import io.github.bardesss.wick.ui.Favicon
 import io.github.bardesss.wick.ui.benchTags
+import io.github.bardesss.wick.ui.short
+import io.github.bardesss.wick.ui.spoken
 import io.github.bardesss.wick.ui.list.RowModel
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.theme.InstrumentSans
@@ -74,7 +78,6 @@ private const val MAX_HEIGHT = 0.78f
 // of the sheet's cap
 private const val LEAD_HEIGHT = 0.4f
 private val SheetShape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)
-private val Scrim = Color(0x99040608)
 private val ImageShape = RoundedCornerShape(14.dp)
 private const val PLACEHOLDER_SHAPE = 16f / 9f
 private const val MIN_SIDE_PX = 48
@@ -107,7 +110,7 @@ fun SummarySheet(
         containerColor = WickColors.Raised,
         contentColor = WickColors.Paper,
         tonalElevation = 0.dp,
-        scrimColor = Scrim,
+        scrimColor = WickColors.Scrim,
         dragHandle = { BottomSheetDefaults.DragHandle(width = 36.dp, height = 4.dp, color = WickColors.Handle) },
     ) {
         // the sheet is its own window, so it needs its own resource id switch
@@ -185,13 +188,14 @@ private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, linkTarge
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                val age = formatAge(nowSec, row.publishedSec)
+                val age = ageOf(nowSec, row.publishedSec)
+                val spokenAge = age.spoken()
                 Text(
-                    if (age == "now") age else stringResource(R.string.sheet_age, age),
+                    if (age == Age.Now) age.short() else stringResource(R.string.sheet_age, age.short()),
                     style = SourceStyle,
                     color = WickColors.Meta,
                     maxLines = 1,
-                    modifier = Modifier.padding(start = 12.dp),
+                    modifier = Modifier.padding(start = 12.dp).semantics { contentDescription = spokenAge },
                 )
             }
             Spacer(Modifier.height(10.dp))

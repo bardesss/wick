@@ -8,32 +8,32 @@ class AgeTest {
 
     @Test
     fun under_a_minute_is_now() {
-        assertEquals("now", formatAge(then, then))
-        assertEquals("now", formatAge(then + 59, then))
+        assertEquals(Age.Now, ageOf(then, then))
+        assertEquals(Age.Now, ageOf(then + 59, then))
     }
 
     @Test
     fun minutes() {
-        assertEquals("1m", formatAge(then + 60, then))
-        assertEquals("12m", formatAge(then + 12 * 60 + 30, then))
-        assertEquals("59m", formatAge(then + 3599, then))
+        assertEquals(Age.Minutes(1), ageOf(then + 60, then))
+        assertEquals(Age.Minutes(12), ageOf(then + 12 * 60 + 30, then))
+        assertEquals(Age.Minutes(59), ageOf(then + 3599, then))
     }
 
     @Test
     fun hours() {
-        assertEquals("1h", formatAge(then + 3600, then))
-        assertEquals("3h", formatAge(then + 3 * 3600 + 59 * 60, then))
-        assertEquals("23h", formatAge(then + 86_399, then))
+        assertEquals(Age.Hours(1), ageOf(then + 3600, then))
+        assertEquals(Age.Hours(3), ageOf(then + 3 * 3600 + 59 * 60, then))
+        assertEquals(Age.Hours(23), ageOf(then + 86_399, then))
     }
 
     @Test
     fun days() {
-        assertEquals("1d", formatAge(then + 86_400, then))
-        assertEquals("2d", formatAge(then + 2 * 86_400 + 5, then))
+        assertEquals(Age.Days(1), ageOf(then + 86_400, then))
+        assertEquals(Age.Days(2), ageOf(then + 2 * 86_400 + 5, then))
     }
 
     @Test
     fun future_is_now() {
-        assertEquals("now", formatAge(then, then + 500))
+        assertEquals(Age.Now, ageOf(then, then + 500))
     }
 }

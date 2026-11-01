@@ -20,11 +20,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,7 +42,6 @@ import io.github.bardesss.wick.ui.theme.WickText
 private val LabelStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp, letterSpacing = 0.4.sp)
 private val ChoiceStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 16.sp)
 private val NoteStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
-private val IdleChoice = Color(0xFFB7BEC6)
 private const val PROJECT_URL = "https://github.com/bardesss/wick"
 
 /** Null for a setting that has not been read yet; no choice is highlighted until it is. */
@@ -142,7 +142,12 @@ fun SettingsScreen(
 
 @Composable
 private fun Section(label: String, content: @Composable () -> Unit) {
-    Text(label, style = LabelStyle, color = WickColors.Meta, modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+    Text(
+        label,
+        style = LabelStyle,
+        color = WickColors.Meta,
+        modifier = Modifier.padding(top = 20.dp, bottom = 4.dp).semantics { heading() },
+    )
     content()
 }
 
@@ -151,7 +156,7 @@ private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         label,
         style = ChoiceStyle,
-        color = if (selected) WickColors.Amber else IdleChoice,
+        color = if (selected) WickColors.Amber else WickColors.Muted,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
