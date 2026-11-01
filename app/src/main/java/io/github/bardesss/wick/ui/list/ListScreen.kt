@@ -34,7 +34,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -57,9 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -106,7 +103,6 @@ private val TapTarget = 48.dp
 private val MarkAllHeight = 32.dp
 private val MarkAllShape = RoundedCornerShape(18.dp)
 private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp)
-private val FOOTER_SLACK = 16.dp
 private const val ARM_TIMEOUT_MS = 4000L
 private const val FOOTER_KEY = 0
 
@@ -290,8 +286,6 @@ fun ListContent(
     onSwipeTick: () -> Unit = {},
     reducedMotion: Boolean = false,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
-    /** The state behind the indicator of a pull that starts on the footer; a test can read it. */
-    footerPullState: PullToRefreshState = rememberPullToRefreshState(),
     /** Fixed sideways offsets in px by row id, for previews. */
     swipePreview: Map<String, Float> = emptyMap(),
 ) {
@@ -321,48 +315,13 @@ fun ListContent(
                 )
             }
             val pull = rememberPullToRefreshState()
-            val rowCount by rememberUpdatedState(rows?.size ?: -1)
-            val refreshingNow by rememberUpdatedState(refreshing)
-            val refreshNow by rememberUpdatedState(onRefresh)
-            val pullScope = rememberCoroutineScope()
-            val density = LocalDensity.current
-            // a pull that starts on the footer has its own state and indicator, apart from the box's
-            var footerOwned by remember { mutableStateOf(false) }
-            val footerBusy = footerOwned && refreshing
-            LaunchedEffect(refreshing) { if (!refreshing) footerOwned = false }
-            LaunchedEffect(footerBusy) {
-                if (footerBusy) footerPullState.animateToThreshold() else if (!refreshingNow) footerPullState.animateToHidden()
-            }
-            val footerPull = remember(listState, footerPullState) {
-                val slackPx = with(density) { FOOTER_SLACK.toPx() }
-                FooterPull(
-                    state = footerPullState,
-                    scope = pullScope,
-                    thresholdPx = with(density) { PullToRefreshDefaults.PositionalThreshold.toPx() },
-                    // the footer is the first item on screen and has hardly moved up
-                    active = {
-                        listState.firstVisibleItemIndex == rowCount &&
-                            listState.firstVisibleItemScrollOffset <= slackPx
-                    },
-                    refreshing = { refreshingNow },
-                    onRefresh = {
-                        footerOwned = true
-                        refreshNow()
-                    },
-                )
-            }
-            // the footer pull sits above the box, so it sees every drag and fling first
-            Box(Modifier.fillMaxSize().nestedScroll(footerPull)) {
             PullToRefreshBox(
                 isRefreshing = refreshing,
-                onRefresh = {
-                    footerOwned = false
-                    onRefresh()
-                },
+                onRefresh = onRefresh,
                 state = pull,
                 modifier = Modifier.fillMaxSize(),
                 indicator = {
-                    if (!footerBusy) PullToRefreshDefaults.Indicator(
+                    PullToRefreshDefaults.Indicator(
                         state = pull,
                         isRefreshing = refreshing,
                         containerColor = WickColors.Raised,
@@ -410,18 +369,10 @@ fun ListContent(
                             }
                         }
                         item(key = FOOTER_KEY, contentType = "caught_up") {
-                            CaughtUp(Modifier.height(footerHeight))
+                            CaughtUp(onRefresh = onRefresh, refreshing = refreshing, modifier = Modifier.height(footerHeight))
                         }
                     }
                 }
-            }
-            PullToRefreshDefaults.Indicator(
-                state = footerPullState,
-                isRefreshing = footerBusy,
-                containerColor = WickColors.Raised,
-                color = WickColors.Amber,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
             }
         }
         SnackbarHost(
