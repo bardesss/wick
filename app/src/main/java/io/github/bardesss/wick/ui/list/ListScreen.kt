@@ -3,7 +3,9 @@ package io.github.bardesss.wick.ui.list
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -54,6 +56,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,11 +82,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private val CountStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 14.sp, fontFeatureSettings = "tnum")
 private val NoteStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
 private val ToastStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.5.sp)
 private val ToastShape = RoundedCornerShape(12.dp)
+private val FlameSize = 28.dp
 private const val FOOTER_KEY = 0
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -379,6 +384,13 @@ private fun Header(name: String, count: Int, animate: Boolean, onClick: () -> Un
             .statusBarsPadding()
             .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 10.dp),
     ) {
+        Image(
+            painter = painterResource(R.drawable.ic_flame),
+            contentDescription = null,
+            // the flame stands 10% above the bottom of its box, so that edge goes on the title's baseline
+            modifier = Modifier.size(FlameSize).alignBy { (it.measuredHeight * 0.9f).roundToInt() },
+        )
+        Spacer(Modifier.width(6.dp))
         Text(
             name,
             style = WickText.Header.copy(letterSpacing = (-0.4).sp),
