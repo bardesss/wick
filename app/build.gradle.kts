@@ -60,6 +60,8 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
+            // Robolectric 4.17 reaches into FileDescriptor when it sets up the app on JDK 21;
+            // without this every Robolectric test fails with "Failed to interact with raw FileDescriptor internals"
             it.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
         }
     }

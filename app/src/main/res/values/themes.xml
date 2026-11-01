@@ -2,6 +2,7 @@
 <resources>
     <style name="Theme.Wick" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/night</item>
+        <!-- before API 35 the window shows these until enableEdgeToEdge runs; values-v35 leaves them out -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>

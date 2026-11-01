@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.Newsreader
+import io.github.bardesss.wick.ui.theme.TapTarget
 import io.github.bardesss.wick.ui.theme.WickColors
 
 private val HeadStyle = TextStyle(
@@ -47,7 +48,6 @@ private val ButtonStyle = TextStyle(
     fontSize = 14.sp,
     textAlign = TextAlign.Center,
 )
-private val TapTarget = 48.dp
 
 /**
  * The end of the list, and the whole list when it is empty. The caller gives it the viewport height.

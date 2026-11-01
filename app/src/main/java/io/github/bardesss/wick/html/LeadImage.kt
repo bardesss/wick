@@ -2,7 +2,6 @@ package io.github.bardesss.wick.html
 
 import org.jsoup.Jsoup
 
-private const val MAX_INPUT = 200_000
 private val tinySides = setOf(0, 1, 2)
 private val hidden = Regex("display\\s*:\\s*none", RegexOption.IGNORE_CASE)
 
@@ -13,7 +12,7 @@ private val hidden = Regex("display\\s*:\\s*none", RegexOption.IGNORE_CASE)
  */
 fun leadImageUrl(html: String?, link: String?): String? {
     if (html.isNullOrBlank()) return null
-    val body = Jsoup.parseBodyFragment(html.take(MAX_INPUT), link?.trim().orEmpty()).body()
+    val body = Jsoup.parseBodyFragment(html.take(MAX_HTML_INPUT), link?.trim().orEmpty()).body()
     for (img in body.select("img[src]")) {
         if (side(img.attr("width")) in tinySides || side(img.attr("height")) in tinySides) continue
         if (hidden.containsMatchIn(img.attr("style"))) continue

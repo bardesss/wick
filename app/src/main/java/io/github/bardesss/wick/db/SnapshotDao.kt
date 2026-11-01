@@ -58,7 +58,7 @@ abstract class SnapshotDao {
     @Transaction
     open suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long, viewRaw: String = StreamId.All.raw) {
         clear()
-        ids.mapIndexed { pos, id -> SnapshotEntity(pos, id) }.chunked(500).forEach { insert(it) }
+        ids.mapIndexed { pos, id -> SnapshotEntity(pos, id) }.chunked(CHUNK).forEach { insert(it) }
         setMeta(SnapshotMetaEntity(writtenAtMs = writtenAtMs, viewRaw = viewRaw))
     }
 }

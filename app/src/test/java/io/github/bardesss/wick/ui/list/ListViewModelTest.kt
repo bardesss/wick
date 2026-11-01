@@ -20,6 +20,7 @@ import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.sync.inMemoryDb
 import io.github.bardesss.wick.sync.newQueue
+import io.github.bardesss.wick.sync.storedItems
 import io.github.bardesss.wick.ui.Note
 import io.github.bardesss.wick.ui.picker.PickerEntry
 import kotlinx.coroutines.CompletableDeferred
@@ -186,7 +187,7 @@ class ListViewModelTest {
 
         assertEquals(StreamId.Folder("News"), second.view.value)
         assertEquals(listOf("b", "a"), ids(second, listOf("b", "a")))
-        assertTrue(db.itemDao().byIds(listOf("b")).first().single().manualUnread)
+        assertTrue(db.storedItems(listOf("b")).single().manualUnread)
         assertEquals(fetchesBefore, fetches)
     }
 
@@ -223,7 +224,7 @@ class ListViewModelTest {
 
         sync.refresh(StreamId.All, oldestFirst = false).getOrThrow()
 
-        assertEquals(listOf("r"), db.itemDao().byIds(listOf("r")).first().map { it.id })
+        assertEquals(listOf("r"), db.storedItems(listOf("r")).map { it.id })
     }
 
     @Test
@@ -430,7 +431,7 @@ class ListViewModelTest {
         assertEquals(listOf(StreamId.Folder("News").raw to 201_000_000L), api.markAllCalls)
         assertTrue(api.isRead("a") && api.isRead("b"))
         assertFalse(api.isRead("c") || api.isRead("d"))
-        val c = db.itemDao().byIds(listOf("c")).first().single()
+        val c = db.storedItems(listOf("c")).single()
         assertFalse(c.read)
     }
 
@@ -504,7 +505,7 @@ class ListViewModelTest {
         ids(vm, emptyList())
         settle(vm.refreshing) { !it }
         // sync stored an item the snapshot does not hold, so the header counts it
-        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null, null)))
+        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null)))
         db.feedDao().replaceCounts(listOf(CountEntity("feed/1", 1)))
         db.itemDao().upsertKeepingLocal(listOf(ItemEntity("x", "feed/1", "T x", null, 150, null, read = false)))
         assertEquals(1, settle(vm.count) { it == 1 })
@@ -554,7 +555,7 @@ class ListViewModelTest {
         val vm = vm()
         ids(vm, emptyList())
         settle(vm.refreshing) { !it }
-        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null, null)))
+        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null)))
         db.feedDao().replaceCounts(listOf(CountEntity("feed/1", 4)))
         assertEquals(4, settle(vm.count) { it == 4 })
 

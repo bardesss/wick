@@ -16,9 +16,6 @@ import java.net.UnknownServiceException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** Where v0.1.0 served the API, relative to the bare server address it stored. */
-const val LEGACY_API_PATH = "/rest/googlereader"
-
 data class Auth(val server: String, val token: String) {
     override fun toString() = "Auth(server=$server, token=***)"
 }
@@ -51,7 +48,6 @@ class GReaderApi(
                 id = it.id,
                 title = decodeEntities(it.title),
                 folder = it.categories.firstOrNull()?.label?.takeIf { l -> l.isNotEmpty() },
-                htmlUrl = it.htmlUrl?.takeIf { u -> u.isNotEmpty() },
                 iconUrl = it.iconUrl?.takeIf { u -> u.isNotEmpty() },
             )
         }

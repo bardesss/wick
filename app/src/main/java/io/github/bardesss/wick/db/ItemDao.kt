@@ -6,15 +6,13 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import io.github.bardesss.wick.api.StreamId
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
 
 data class LocalState(val id: String, val read: Boolean, val manualUnread: Boolean)
 
 data class ItemFeed(val id: String, val feedId: String)
 
-private const val CHUNK = 500
+/** How many ids go into one IN (...) list, below SQLite's limit on query arguments. */
+internal const val CHUNK = 500
 
 /** The items a pending mark-all marks read: of [feeds] (all when null) and published by [newestSec]. */
 private class MarkAllCover(val feeds: Set<String>?, val newestSec: Long) {
@@ -40,12 +38,6 @@ abstract class ItemDao {
 
     @Query("SELECT id FROM FeedEntity WHERE folder = :folder")
     protected abstract suspend fun feedsInFolder(folder: String): List<String>
-
-    @Query(
-        "SELECT i.*, f.title AS feedTitle, f.iconUrl AS feedIconUrl FROM ItemEntity i " +
-            "LEFT JOIN FeedEntity f ON f.id = i.feedId WHERE i.id IN (:ids)",
-    )
-    protected abstract fun rowsFor(ids: List<String>): Flow<List<ItemRow>>
 
     @Query("UPDATE ItemEntity SET read = :read, manualUnread = :manualUnread WHERE id = :id")
     abstract suspend fun setRead(id: String, read: Boolean, manualUnread: Boolean)
@@ -149,15 +141,6 @@ abstract class ItemDao {
             is StreamId.Feed -> setOf(s.id)
         }
         MarkAllCover(feeds, m.olderThanUsec / 1_000_000 - 1)
-    }
-
-    fun byIds(ids: List<String>): Flow<List<ItemRow>> {
-        if (ids.isEmpty()) return flowOf(emptyList())
-        val chunks = ids.chunked(CHUNK).map { rowsFor(it) }
-        return combine(chunks) { parts ->
-            val byId = parts.flatMap { it }.associateBy { it.id }
-            ids.mapNotNull { byId[it] }
-        }
     }
 
     @Transaction

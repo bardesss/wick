@@ -36,12 +36,12 @@ import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.Wordmark
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.theme.InstrumentSans
+import io.github.bardesss.wick.ui.theme.TapTarget
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
 
 private val LabelStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp, letterSpacing = 0.4.sp)
 private val ChoiceStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 16.sp)
-private val NoteStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
 private const val PROJECT_URL = "https://github.com/bardesss/wick"
 
 /** Null for a setting that has not been read yet; no choice is highlighted until it is. */
@@ -59,6 +59,7 @@ fun SettingsScreen(
     onHaptics: (Boolean) -> Unit,
     onLinkTarget: (LinkTarget) -> Unit,
     onSignOut: () -> Unit,
+    /** Only the snapshot tests set it, so the picture does not change with every release. */
     version: String = BuildConfig.VERSION_NAME,
 ) {
     val context = LocalContext.current
@@ -104,14 +105,14 @@ fun SettingsScreen(
                 }
             }
             Section(stringResource(R.string.settings_account)) {
-                Text(server, style = NoteStyle, color = WickColors.Meta, modifier = Modifier.padding(vertical = 8.dp))
+                Text(server, style = WickText.Note, color = WickColors.Meta, modifier = Modifier.padding(vertical = 8.dp))
                 Text(
                     stringResource(R.string.settings_sign_out),
                     style = ChoiceStyle,
                     color = WickColors.Amber,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 48.dp)
+                        .heightIn(min = TapTarget)
                         .clickable(role = Role.Button, onClick = onSignOut)
                         .padding(vertical = 12.dp),
                 )
@@ -126,15 +127,15 @@ fun SettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     stringResource(R.string.settings_source),
-                    style = NoteStyle,
+                    style = WickText.Note,
                     color = WickColors.Meta,
                     modifier = Modifier
-                        .heightIn(min = 48.dp)
+                        .heightIn(min = TapTarget)
                         .clickable(role = Role.Button) { openLink(context, PROJECT_URL, linkTarget ?: LinkTarget.InApp) }
                         .padding(horizontal = 12.dp)
                         .wrapContentHeight(Alignment.CenterVertically),
                 )
-                Text(version, style = NoteStyle, color = WickColors.Meta)
+                Text(version, style = WickText.Note, color = WickColors.Meta)
             }
         }
     }
@@ -159,7 +160,7 @@ private fun Choice(label: String, selected: Boolean, onClick: () -> Unit) {
         color = if (selected) WickColors.Amber else WickColors.Muted,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
+            .heightIn(min = TapTarget)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(vertical = 12.dp),
     )

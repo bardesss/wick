@@ -99,6 +99,7 @@ import io.github.bardesss.wick.ui.resolve
 import io.github.bardesss.wick.ui.sheet.SheetBody
 import io.github.bardesss.wick.ui.sheet.SummarySheet
 import io.github.bardesss.wick.ui.theme.InstrumentSans
+import io.github.bardesss.wick.ui.theme.TapTarget
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
 import kotlinx.coroutines.Job
@@ -108,11 +109,9 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val CountStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 14.sp, fontFeatureSettings = "tnum")
-private val NoteStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
 private val ToastStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.5.sp)
 private val ToastShape = RoundedCornerShape(12.dp)
 private val FlameSize = 28.dp
-private val TapTarget = 48.dp
 private val MarkAllHeight = 32.dp
 private val MarkAllShape = RoundedCornerShape(18.dp)
 private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp)
@@ -325,7 +324,7 @@ fun ListContent(
     onSwipeTick: () -> Unit = {},
     reducedMotion: Boolean = false,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
-    /** Fixed sideways offsets in px by row id, for previews. */
+    /** Fixed sideways offsets in px by row id, for previews; only the snapshot tests set it. */
     swipePreview: Map<String, Float> = emptyMap(),
 ) {
     val frameSink by rememberUpdatedState(onFrame)
@@ -348,7 +347,7 @@ fun ListContent(
             if (message != null) {
                 Text(
                     message,
-                    style = NoteStyle,
+                    style = WickText.Note,
                     color = WickColors.Meta,
                     modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 8.dp),
                 )

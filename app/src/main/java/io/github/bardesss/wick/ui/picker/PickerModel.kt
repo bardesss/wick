@@ -50,7 +50,7 @@ fun buildPicker(feeds: List<FeedEntity>, counts: Map<String, Int>): List<PickerE
  * Leaves out the feeds with nothing unread and the folders whose total is zero. "All unread", the
  * [selected] view and the folder that holds a selected feed always stay.
  */
-fun hideEmpty(entries: List<PickerEntry>, selected: StreamId): List<PickerEntry> {
+fun withoutEmpty(entries: List<PickerEntry>, selected: StreamId): List<PickerEntry> {
     val selectedFolder = folderOfFeed(entries, selected)
     return entries.filter { e ->
         when (e) {
@@ -108,12 +108,12 @@ class MarkAllArm {
     var armed by mutableStateOf(false)
         private set
 
-    fun arm() {
+    private fun arm() {
         armed = true
     }
 
     /** True when it was armed, which is when the second tap should act. Disarms either way. */
-    fun confirm(): Boolean {
+    private fun confirm(): Boolean {
         val was = armed
         armed = false
         return was

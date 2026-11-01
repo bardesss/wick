@@ -17,10 +17,10 @@ import io.github.bardesss.wick.data.KeystoreTokenCipher
 import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.fake.FakeServerMode
+import io.github.bardesss.wick.sync.AccountSwitch
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
-import io.github.bardesss.wick.ui.settings.AccountSwitch
-import io.github.bardesss.wick.ui.settings.wipeAccount
+import io.github.bardesss.wick.sync.wipeAccount
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +30,9 @@ import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
 import java.io.File
 import java.util.concurrent.TimeUnit
+
+/** The tag of every log line the app writes. */
+const val LOG_TAG = "Wick"
 
 class AppContainer(val context: Context) {
     val db: WickDb by lazy {
@@ -48,7 +51,7 @@ class AppContainer(val context: Context) {
 
     val appScope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO +
-            CoroutineExceptionHandler { _, e -> Log.e("Wick", "uncaught error in app scope", e) },
+            CoroutineExceptionHandler { _, e -> Log.e(LOG_TAG, "uncaught error in app scope", e) },
     )
 
     // a cap on the whole call, so a server that trickles its answer cannot hold a sync forever

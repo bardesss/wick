@@ -3,6 +3,7 @@ package io.github.bardesss.wick.db
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import io.github.bardesss.wick.api.FeedInFolder
 
 @Entity(indices = [Index("feedId"), Index("publishedSec")])
 data class ItemEntity(
@@ -18,12 +19,11 @@ data class ItemEntity(
 
 @Entity
 data class FeedEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey override val id: String,
     val title: String,
-    val folder: String?,
-    val htmlUrl: String?,
+    override val folder: String?,
     val iconUrl: String?,
-)
+) : FeedInFolder
 
 @Entity
 data class CountEntity(
@@ -58,17 +58,4 @@ data class SnapshotMetaEntity(
     @PrimaryKey val id: Int = 0,
     val writtenAtMs: Long,
     val viewRaw: String = "user/-/state/com.google/reading-list",
-)
-
-data class ItemRow(
-    val id: String,
-    val feedId: String,
-    val title: String,
-    val url: String?,
-    val publishedSec: Long,
-    val html: String?,
-    val read: Boolean,
-    val manualUnread: Boolean,
-    val feedTitle: String?,
-    val feedIconUrl: String?,
 )

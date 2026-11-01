@@ -15,7 +15,6 @@ object WickColors {
     val Amber = Color(0xFFE3A857)
     val Dusk = Color(0xFF5A4628)
     val Sage = Color(0xFF3D5C4E)
-    val Core = Color(0xFFFFE2A8)
     val Handle = Color(0xFF3A434D)
     /** Dims the list under the drawer and the sheet. */
     val Scrim = Color(0x99040608)

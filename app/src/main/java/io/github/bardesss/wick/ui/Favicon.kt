@@ -24,16 +24,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
+import io.github.bardesss.wick.api.KnownApiPaths
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.WickColors
 import java.net.URI
 
-private val apiSuffixes = listOf("/rest/googlereader", "/api/greader.php")
-
 /** The site the API lives on: the API URL without a trailing known API path, else the URL itself. */
 fun siteRoot(apiUrl: String): String {
     val url = apiUrl.trim().trimEnd('/')
-    val suffix = apiSuffixes.firstOrNull { url.endsWith(it, ignoreCase = true) } ?: return url
+    val suffix = KnownApiPaths.all.firstOrNull { url.endsWith(it, ignoreCase = true) } ?: return url
     return url.dropLast(suffix.length).trimEnd('/')
 }
 

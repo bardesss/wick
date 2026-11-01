@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.Auth
+import io.github.bardesss.wick.api.KnownApiPaths
 import io.github.bardesss.wick.api.ReaderApi
 import io.github.bardesss.wick.data.CredentialStore
 import io.github.bardesss.wick.ui.Note
@@ -27,11 +28,9 @@ fun normaliseApiUrl(raw: String): String {
     return (if (scheme.containsMatchIn(s)) s else "https://$s").trimEnd('/')
 }
 
-private val fallbackPaths = listOf("/rest/googlereader", "/api/greader.php")
-
 /** The URL as entered, then the known API paths appended to it unless it already ends with one. */
 fun loginCandidates(apiUrl: String): List<String> =
-    listOf(apiUrl) + fallbackPaths.filterNot { apiUrl.endsWith(it, ignoreCase = true) }.map { apiUrl + it }
+    listOf(apiUrl) + KnownApiPaths.all.filterNot { apiUrl.endsWith(it, ignoreCase = true) }.map { apiUrl + it }
 
 /** Names the account a sign in is for, to tell a new key for the same account from another account. */
 fun accountId(server: String, user: String): String = normaliseApiUrl(server).lowercase() + "\n" + user.trim()

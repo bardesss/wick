@@ -122,6 +122,7 @@ fun SwipeRow(
     onThreshold: () -> Unit,
     onSwipe: (SwipeOutcome) -> Unit,
     modifier: Modifier = Modifier,
+    /** Where the row starts, dragged aside; only the snapshot tests set it, the app always starts at 0. */
     startOffsetPx: Float = 0f,
     gestureInsetPx: Int = WindowInsets.systemGestures.getLeft(LocalDensity.current, LocalLayoutDirection.current),
     content: @Composable (Modifier) -> Unit,

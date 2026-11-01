@@ -30,7 +30,8 @@ private val blocks = setOf(
 )
 private val headings = setOf("h1", "h2", "h3", "h4", "h5", "h6")
 private val linkSchemes = listOf("http://", "https://")
-private const val MAX_INPUT = 200_000
+/** How much of an item's HTML is parsed; the rest is cut, the sheet only shows the start anyway. */
+internal const val MAX_HTML_INPUT = 200_000
 
 /**
  * Turns feed HTML into styled text for the sheet. Returns null when nothing readable is left.
@@ -40,7 +41,7 @@ fun htmlToAnnotated(html: String?): AnnotatedString? {
     if (html.isNullOrBlank()) return null
     val out = TextWriter()
     // very long feeds are cut rather than parsed whole; the sheet only shows the start anyway
-    out.children(Jsoup.parseBodyFragment(html.take(MAX_INPUT)).body())
+    out.children(Jsoup.parseBodyFragment(html.take(MAX_HTML_INPUT)).body())
     return out.build()
 }
 

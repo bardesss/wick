@@ -47,7 +47,7 @@ class MarkQueueTest {
         ids.forEach { api.addItem(it, "feed/1", publishedSec) }
     }
 
-    private suspend fun row(id: String) = db.itemDao().byIds(listOf(id)).first().single()
+    private fun row(id: String) = db.storedItems(listOf(id)).single()
 
     @Test
     fun mark_is_local_immediately_and_sent_after_flush() = runTest {

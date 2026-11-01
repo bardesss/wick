@@ -90,7 +90,6 @@ private val TitleStyle = TextStyle(
     letterSpacing = (-0.3).sp,
 )
 private val EmptyStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 14.sp, lineHeight = 1.5.em)
-private val ButtonStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 15.sp)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -221,7 +220,7 @@ private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, linkTarge
                 .fillMaxWidth()
                 .padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 26.dp),
         ) {
-            Text(stringResource(R.string.sheet_open), style = ButtonStyle)
+            Text(stringResource(R.string.sheet_open), style = WickText.Button)
         }
     }
 }

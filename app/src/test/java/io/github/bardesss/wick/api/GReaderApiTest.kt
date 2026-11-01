@@ -111,8 +111,8 @@ class GReaderApiTest {
         val feeds = runBlocking { api.feeds() }
         assertEquals(
             listOf(
-                Feed("feed/3", "Blog & Co", "News", "https://b.example", "https://b.example/i.png"),
-                Feed("feed/4", "Loose", null, null, null),
+                Feed("feed/3", "Blog & Co", "News", "https://b.example/i.png"),
+                Feed("feed/4", "Loose", null, null),
             ),
             feeds,
         )

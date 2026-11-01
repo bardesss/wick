@@ -12,7 +12,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
-import io.github.bardesss.wick.api.LEGACY_API_PATH
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -89,9 +88,9 @@ class SettingsStore(private val store: DataStore<Preferences>) {
     suspend fun account(): String? {
         val prefs = store.data.first()
         val id = prefs[accountKey] ?: return null
-        if (prefs[accountFormatKey] == ACCOUNT_FORMAT) return id
+        if (prefs[accountFormatKey] == STORE_FORMAT) return id
         val split = id.indexOf('\n').let { if (it < 0) id.length else it }
-        val migrated = id.substring(0, split).trimEnd('/') + LEGACY_API_PATH + id.substring(split)
+        val migrated = legacyApiUrl(id.substring(0, split)) + id.substring(split)
         setAccount(migrated)
         return migrated
     }
@@ -103,7 +102,7 @@ class SettingsStore(private val store: DataStore<Preferences>) {
                 it.remove(accountFormatKey)
             } else {
                 it[accountKey] = id
-                it[accountFormatKey] = ACCOUNT_FORMAT
+                it[accountFormatKey] = STORE_FORMAT
             }
         }
     }
@@ -116,7 +115,6 @@ class SettingsStore(private val store: DataStore<Preferences>) {
     }
 
     companion object {
-        private const val ACCOUNT_FORMAT = 2
         private const val IN_APP = "in_app"
         private const val DEFAULT_APP = "default_app"
 

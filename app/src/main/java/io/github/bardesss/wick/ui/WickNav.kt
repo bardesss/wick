@@ -19,13 +19,13 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.bardesss.wick.AppContainer
 import io.github.bardesss.wick.data.LinkTarget
+import io.github.bardesss.wick.sync.wipeAccount
 import io.github.bardesss.wick.ui.list.ListScreen
 import io.github.bardesss.wick.ui.list.ListViewModel
 import io.github.bardesss.wick.ui.login.LoginScreen
 import io.github.bardesss.wick.ui.login.LoginViewModel
 import io.github.bardesss.wick.ui.settings.SettingsScreen
 import io.github.bardesss.wick.ui.settings.signOut
-import io.github.bardesss.wick.ui.settings.wipeAccount
 import io.github.bardesss.wick.ui.theme.WickColors
 import androidx.compose.foundation.background
 import androidx.compose.ui.semantics.hideFromAccessibility

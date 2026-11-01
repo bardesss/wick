@@ -13,7 +13,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import io.github.bardesss.wick.api.Auth
-import io.github.bardesss.wick.api.LEGACY_API_PATH
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -120,7 +119,7 @@ class KeystoreCredentialStore(
         val stored = Base64.getEncoder().encodeToString(cipher.encrypt(plain))
         store.edit {
             it[key] = stored
-            it[formatKey] = FORMAT
+            it[formatKey] = STORE_FORMAT
         }
     }
 
@@ -136,14 +135,10 @@ class KeystoreCredentialStore(
             store.edit { it.remove(key) }
             return null
         }
-        if (prefs[formatKey] == FORMAT) return auth
-        val migrated = auth.copy(server = auth.server.trimEnd('/') + LEGACY_API_PATH)
+        if (prefs[formatKey] == STORE_FORMAT) return auth
+        val migrated = auth.copy(server = legacyApiUrl(auth.server))
         // a failed rewrite is redone on the next start, so it must not stop this one
         runCatching { write(migrated) }
         return migrated
-    }
-
-    private companion object {
-        const val FORMAT = 2
     }
 }

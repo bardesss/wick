@@ -7,6 +7,7 @@ import io.github.bardesss.wick.api.Item
 import io.github.bardesss.wick.api.ReaderApi
 import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.api.UnreadCount
+import io.github.bardesss.wick.api.feedIds
 import io.github.bardesss.wick.db.CountEntity
 import io.github.bardesss.wick.db.FeedEntity
 import io.github.bardesss.wick.db.ItemEntity
@@ -49,7 +50,7 @@ class SyncEngine(
                 // a read mark the server has not seen yet keeps an item read, and a new list leaves it out
                 val read = db.itemDao().readAmong(ids)
                 if (fetched.complete) {
-                    db.itemDao().markMissingRead(feedIdsOf(view, fetched.feeds), ids.toSet())
+                    db.itemDao().markMissingRead(view.feedIds(fetched.feeds), ids.toSet())
                 }
                 db.itemDao().clearManualUnread()
                 db.itemDao().pruneReadNotIn(ids.toSet())
@@ -122,7 +123,7 @@ class SyncEngine(
     }
 
     private suspend fun store(f: Fetched) {
-        db.feedDao().replaceAll(f.feeds.map { FeedEntity(it.id, it.title, it.folder, it.htmlUrl, it.iconUrl) })
+        db.feedDao().replaceAll(f.feeds.map { FeedEntity(it.id, it.title, it.folder, it.iconUrl) })
         db.feedDao().replaceCounts(f.counts.map { CountEntity(it.streamId, it.count) })
         db.itemDao().upsertKeepingLocal(
             f.items.map {
@@ -137,11 +138,5 @@ class SyncEngine(
                 )
             },
         )
-    }
-
-    private fun feedIdsOf(view: StreamId, feeds: List<Feed>): List<String>? = when (view) {
-        StreamId.All -> null
-        is StreamId.Folder -> feeds.filter { it.folder == view.name }.map { it.id }
-        is StreamId.Feed -> listOf(view.id)
     }
 }

@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -272,7 +272,7 @@ class ScreenSnapshots {
     )
 
     private fun drawer(name: String, armed: Boolean, entries: List<PickerEntry> = pickerEntries) = snap(name) {
-        val arm = remember { MarkAllArm().also { if (armed) it.arm() } }
+        val arm = remember { MarkAllArm().also { if (armed) it.tap(canMark = true) } }
         PickerDrawer(
             state = rememberDrawerState(DrawerValue.Open),
             entries = entries,

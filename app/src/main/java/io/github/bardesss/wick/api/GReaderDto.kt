@@ -10,12 +10,11 @@ internal data class SubscriptionDto(
     val id: String,
     val title: String = "",
     val categories: List<CategoryDto> = emptyList(),
-    val htmlUrl: String? = null,
     val iconUrl: String? = null,
 )
 
 @Serializable
-internal data class CategoryDto(val id: String = "", val label: String = "")
+internal data class CategoryDto(val label: String = "")
 
 @Serializable
 internal data class UnreadCountsDto(val unreadcounts: List<UnreadCountDto> = emptyList())
@@ -49,7 +48,6 @@ internal data class ContentDto(val content: String? = null)
 internal data class OriginDto(
     val streamId: String? = null,
     val title: String? = null,
-    val htmlUrl: String? = null,
 )
 
 internal fun StreamItemDto.toItem(): Item {

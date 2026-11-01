@@ -36,16 +36,21 @@ fun linkIntent(url: String, target: LinkTarget): Intent? {
     }
 }
 
-/** Opens [url] the way [target] says, falling back to a plain view intent. Other schemes are ignored. */
+/**
+ * Opens [url] the way [target] says. A Custom Tab falls back to a plain view intent when no
+ * browser takes it. Other schemes are ignored.
+ */
 fun openLink(context: Context, url: String, target: LinkTarget) {
     val intent = linkIntent(url, target) ?: return
+    if (start(context, intent) || target != LinkTarget.InApp) return
+    start(context, Intent(Intent.ACTION_VIEW, url.toUri()))
+}
+
+// false when nothing on the device can open it
+private fun start(context: Context, intent: Intent): Boolean =
     try {
         context.startActivity(intent)
+        true
     } catch (e: ActivityNotFoundException) {
-        try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-        } catch (e: ActivityNotFoundException) {
-            // nothing on the device can open it
-        }
+        false
     }
-}

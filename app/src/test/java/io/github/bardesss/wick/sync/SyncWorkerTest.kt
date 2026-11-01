@@ -93,7 +93,7 @@ class SyncWorkerTest {
 
         assertEquals(setOf("a"), api.readSet())
         assertTrue(db.queueDao().pending().isEmpty())
-        val stored = db.itemDao().byIds(listOf("a", "b")).first().map { it.id }.toSet()
+        val stored = db.storedItems(listOf("a", "b")).map { it.id }.toSet()
         assertEquals(setOf("a", "b"), stored)
     }
 
@@ -107,7 +107,7 @@ class SyncWorkerTest {
 
         assertTrue(api.readSet().isEmpty())
         assertEquals(1, db.queueDao().pending().size)
-        assertTrue(db.itemDao().byIds(listOf("b")).first().isEmpty())
+        assertTrue(db.storedItems(listOf("b")).isEmpty())
     }
 
     @Test
@@ -118,7 +118,7 @@ class SyncWorkerTest {
         assertEquals(ListenableWorker.Result.success(), runWorker(flushOnly = true))
 
         assertEquals(setOf("a"), api.readSet())
-        assertTrue(db.itemDao().byIds(listOf("b")).first().isEmpty())
+        assertTrue(db.storedItems(listOf("b")).isEmpty())
     }
 
     @Test

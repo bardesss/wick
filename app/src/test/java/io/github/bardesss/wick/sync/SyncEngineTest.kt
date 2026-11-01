@@ -49,7 +49,7 @@ class SyncEngineTest {
     private fun local(id: String, feed: String, sec: Long, read: Boolean = false) =
         ItemEntity(id, feed, "T $id", null, sec, null, read)
 
-    private suspend fun row(id: String) = db.itemDao().byIds(listOf(id)).first().singleOrNull()
+    private fun row(id: String) = db.storedItems(listOf(id)).singleOrNull()
 
     @Test
     fun refresh_server_wins_without_pending_change() = runTest {

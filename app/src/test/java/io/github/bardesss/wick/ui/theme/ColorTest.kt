@@ -16,6 +16,5 @@ class ColorTest {
         assertEquals(Color(0xFFE3A857), WickColors.Amber)
         assertEquals(Color(0xFF5A4628), WickColors.Dusk)
         assertEquals(Color(0xFF3D5C4E), WickColors.Sage)
-        assertEquals(Color(0xFFFFE2A8), WickColors.Core)
     }
 }

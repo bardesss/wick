@@ -34,6 +34,10 @@ object WickText {
     val Title = TextStyle(fontFamily = Newsreader, fontWeight = FontWeight.Medium, fontSize = 18.sp)
     val Header = TextStyle(fontFamily = Newsreader, fontWeight = FontWeight.Medium, fontSize = 28.sp)
     val Meta = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Normal, fontSize = 12.5.sp)
+    /** Small notes and links, like the refresh error and the settings footer. */
+    val Note = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
+    /** The text of a full width button. */
+    val Button = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 15.sp)
     val SheetBody = TextStyle(
         fontFamily = Newsreader,
         fontWeight = FontWeight.Normal,

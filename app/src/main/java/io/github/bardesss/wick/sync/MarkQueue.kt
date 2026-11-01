@@ -1,6 +1,7 @@
 package io.github.bardesss.wick.sync
 
 import android.util.Log
+import io.github.bardesss.wick.LOG_TAG
 import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.ReaderApi
 import io.github.bardesss.wick.api.StreamId
@@ -20,7 +21,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-private const val TAG = "Wick"
 private const val BATCH = 100
 private const val DEBOUNCE_MS = 3_000L
 private const val OP_ATTEMPTS = 3
@@ -62,7 +62,7 @@ class MarkQueue(
                     } catch (e: Exception) {
                         // keep the loop alive; retry the same op a few times before dropping it
                         if (++attempt >= OP_ATTEMPTS) {
-                            Log.e(TAG, "dropping a read mark after $OP_ATTEMPTS failed attempts", e)
+                            Log.e(LOG_TAG, "dropping a read mark after $OP_ATTEMPTS failed attempts", e)
                             break
                         }
                         delay(OP_RETRY_MS)
@@ -175,7 +175,7 @@ class MarkQueue(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.w(TAG, "background flush failed", e)
+                    Log.w(LOG_TAG, "background flush failed", e)
                 }
             }
         }
