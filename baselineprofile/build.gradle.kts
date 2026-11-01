@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "io.github.bardesss.wick.baselineprofile"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 28

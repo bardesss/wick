@@ -22,7 +22,7 @@ val keystorePath = providers.environmentVariable("WICK_KEYSTORE_PATH").orNull
 
 android {
     namespace = "io.github.bardesss.wick"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "io.github.bardesss.wick"
