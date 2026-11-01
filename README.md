@@ -29,28 +29,23 @@ Wick shows one list of headlines. You read it top to bottom, and items drop off 
 
 ## Features
 
-- **Titles only.** A clean list of headlines with the feed's icon and age. No thumbnails or previews competing for attention.
-- **Scroll to clear.** Items you scroll past are marked read, so the list always holds what you have not seen yet. When you reach the end, one button checks for new items.
-- **Simple gestures.**
-  - Tap opens the article in the in-app browser or your default app, as you choose in Settings.
-  - Swipe right shows the feed's own text in a sheet.
-  - Swipe left toggles read or unread.
-- **Folders and feeds.** A drawer with your server's folders and feeds, each with its unread count, plus mark all read. Folders fold away, and feeds with nothing unread can be hidden.
-- **Works offline.** Read marks are queued on the phone and sent once the server is reachable again, so a flaky VPN loses nothing.
-- **Quiet background sync.** An hourly sync keeps the list fresh. There are no notifications, ever.
-- **Fast and small.** Native Kotlin and Jetpack Compose on a local database. The APK is about 2 MB.
-- **Private.** No accounts, no analytics, no ads, no trackers. Wick talks to your own server, and articles open in your browser. The one exception is the image at the top of a summary, which loads from the article's site; you can turn it off in Settings.
-- **Dark by design.** Warm candlelight accents on a near-black background, easy on the eyes at night.
+- The list shows titles only, with each feed's icon and the item's age. No thumbnails or previews compete for attention.
+- Items you scroll past are marked read, so the list always holds what you have not seen yet. When you reach the end, one button checks for new items.
+- Tap an item to open the article in the in-app browser or your default app, as you choose in Settings. Swipe right to see the feed's own text in a sheet, and swipe left to mark an item read or unread.
+- A drawer lists your server's folders and feeds with their unread counts, and can mark everything read. Folders fold away, and feeds with nothing unread can be hidden.
+- Read marks are queued on the phone and sent once the server is reachable again, so a flaky VPN loses nothing.
+- An hourly background sync keeps the list fresh. There are no notifications, ever.
+- Wick is native Kotlin and Jetpack Compose on a local database, and the APK is about 2 MB.
+- There are no accounts, analytics, ads or trackers. Wick talks to your own server, and articles open in your browser. The image at the top of a summary is the one exception: it loads from the article's site, and you can turn it off in Settings.
+- Feed icons on your server need your API key, and the server only takes it as part of the address. That means the key shows up in your server's access logs, and in the logs of a proxy in front of it.
+- The look is dark by design: warm candlelight accents on a near-black background, easy on the eyes at night.
 
 ## Requirements
 
 - Android 8.0 or newer.
-- A feed server that offers the Google Reader API. Tested with CommaFeed.
-- The Google Reader API URL of that server, for example:
-  - CommaFeed: `https://your.server/rest/googlereader`
-  - FreshRSS: `https://your.server/api/greader.php`
-  - Miniflux: `https://your.server`
-- Your username and API key from that server (in CommaFeed: Profile).
+- A feed server that offers the Google Reader API over https. Tested with CommaFeed.
+- The Google Reader API URL of that server. It often ends in `/rest/googlereader` or `/api/greader.php`, and some servers use the bare address, like `https://your.server`. If the address you enter has no API, Wick tries those two paths after it.
+- Your username and the API key from your profile on that server.
 
 ## Install
 
