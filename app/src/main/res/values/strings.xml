@@ -43,5 +43,7 @@
     <string name="settings_links_in_app">In-app browser</string>
     <string name="settings_links_default">Default app</string>
     <string name="settings_account">Account</string>
+    <string name="settings_source">Source code</string>
+    <string name="settings_source_label">Open the project page</string>
     <string name="settings_sign_out">Sign out</string>
 </resources>

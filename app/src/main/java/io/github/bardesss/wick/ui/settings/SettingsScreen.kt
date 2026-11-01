@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -21,8 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,6 +35,7 @@ import io.github.bardesss.wick.BuildConfig
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.Wordmark
+import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
@@ -39,6 +44,7 @@ private val LabelStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = Fon
 private val ChoiceStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 16.sp)
 private val NoteStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
 private val IdleChoice = Color(0xFFB7BEC6)
+private const val PROJECT_URL = "https://github.com/bardesss/wick"
 
 /** Null for a setting that has not been read yet; no choice is highlighted until it is. */
 @Composable
@@ -57,6 +63,8 @@ fun SettingsScreen(
     onSignOut: () -> Unit,
     version: String = BuildConfig.VERSION_NAME,
 ) {
+    val context = LocalContext.current
+    val projectPage = stringResource(R.string.settings_source_label)
     Column(
         Modifier
             .fillMaxSize()
@@ -118,7 +126,20 @@ fun SettingsScreen(
             verticalAlignment = Alignment.Bottom,
         ) {
             Wordmark(size = 28.sp)
-            Text(version, style = NoteStyle, color = WickColors.Meta)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.settings_source),
+                    style = NoteStyle,
+                    color = WickColors.Meta,
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .semantics { contentDescription = projectPage }
+                        .clickable(role = Role.Button) { openLink(context, PROJECT_URL, linkTarget ?: LinkTarget.InApp) }
+                        .padding(horizontal = 12.dp)
+                        .wrapContentHeight(Alignment.CenterVertically),
+                )
+                Text(version, style = NoteStyle, color = WickColors.Meta)
+            }
         }
     }
 }
