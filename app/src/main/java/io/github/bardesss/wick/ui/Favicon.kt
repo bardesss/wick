@@ -28,13 +28,22 @@ import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.WickColors
 import java.net.URI
 
-/** Absolute URLs as they are, relative ones against [server], null when there is no icon. */
+private val apiSuffixes = listOf("/rest/googlereader", "/api/greader.php")
+
+/** The site the API lives on: the API URL without a trailing known API path, else the URL itself. */
+fun siteRoot(apiUrl: String): String {
+    val url = apiUrl.trim().trimEnd('/')
+    val suffix = apiSuffixes.firstOrNull { url.endsWith(it, ignoreCase = true) } ?: return url
+    return url.dropLast(suffix.length).trimEnd('/')
+}
+
+/** Absolute URLs as they are, relative ones against the site of the API at [server], null when there is no icon. */
 fun resolveIcon(server: String, iconUrl: String?): String? {
     val icon = iconUrl?.trim()
     if (icon.isNullOrEmpty()) return null
     return try {
         val uri = URI(icon)
-        if (uri.isAbsolute) icon else URI(server.trimEnd('/') + "/").resolve(uri).toString()
+        if (uri.isAbsolute) icon else URI(siteRoot(server) + "/").resolve(uri).toString()
     } catch (e: Exception) {
         null
     }

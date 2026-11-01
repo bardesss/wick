@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Wick</string>
-    <string name="login_server">Server</string>
+    <string name="login_server">Google Reader API URL</string>
     <string name="login_user">Username</string>
     <string name="login_key">API key</string>
-    <string name="login_server_hint">Needs the Google Reader API</string>
+    <string name="login_server_hint">The API address from your server\'s settings</string>
     <string name="login_hint">Use the API key from your profile on the server</string>
     <string name="login_button">Sign in</string>
     <string name="settings">Settings</string>

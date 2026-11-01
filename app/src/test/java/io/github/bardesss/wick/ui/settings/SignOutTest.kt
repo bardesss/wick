@@ -1,5 +1,7 @@
 package io.github.bardesss.wick.ui.settings
 
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import io.github.bardesss.wick.api.Auth
 import io.github.bardesss.wick.data.CredentialStore
 import io.github.bardesss.wick.data.MemoryPreferences
@@ -11,6 +13,7 @@ import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.FakeReaderApi
 import io.github.bardesss.wick.sync.inMemoryDb
 import io.github.bardesss.wick.sync.newQueue
+import io.github.bardesss.wick.ui.login.accountId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,7 +42,8 @@ class SignOutTest {
     }
 
     private lateinit var db: WickDb
-    private val settings = SettingsStore(MemoryPreferences())
+    private val prefs = MemoryPreferences()
+    private val settings = SettingsStore(prefs)
     private val api = FakeReaderApi()
     private val creds = MemoryCreds(Auth("https://feeds.example.com", "tok"))
 
@@ -124,6 +128,23 @@ class SignOutTest {
 
         assertEquals(listOf("a"), db.queueDao().pending().map { it.itemId })
         assertEquals(1, db.feedDao().feedsNow().size)
+    }
+
+    @Test
+    fun v010_account_is_the_same_account_after_update() = runTest(timeout = 30.seconds) {
+        seed()
+        val queue = db.newQueue(api, backgroundScope)
+        // v0.1.0 stored the bare address; the update signs in with the API URL it implied
+        prefs.edit { it[stringPreferencesKey("account")] = "https://feeds.example.com\nme" }
+        val switch = AccountSwitch(settings) { wipeAccount(queue, db, settings) {} }
+        queue.mark("a", read = true, manual = false)
+        queue.awaitApplied()
+
+        switch.enter(accountId("https://feeds.example.com/rest/googlereader", "me"))
+
+        assertEquals(listOf("a"), db.queueDao().pending().map { it.itemId })
+        assertEquals(1, db.feedDao().feedsNow().size)
+        assertEquals("https://feeds.example.com/rest/googlereader\nme", settings.account())
     }
 
     @Test

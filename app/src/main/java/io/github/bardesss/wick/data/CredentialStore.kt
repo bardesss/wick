@@ -7,9 +7,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import io.github.bardesss.wick.api.Auth
+import io.github.bardesss.wick.api.LEGACY_API_PATH
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -84,6 +86,9 @@ class KeystoreCredentialStore(
     )
 
     private val key = stringPreferencesKey("auth")
+
+    /** Absent in v0.1.0, which stored a bare server address instead of the API URL. */
+    private val formatKey = intPreferencesKey("auth_format")
     private val lock = Mutex()
 
     private val state = MutableStateFlow(runBlocking { load() })
@@ -93,25 +98,46 @@ class KeystoreCredentialStore(
     override fun auth(): Auth? = state.value
 
     override suspend fun save(auth: Auth) = lock.withLock {
-        val plain = "${auth.server}\n${auth.token}".toByteArray()
-        val stored = Base64.getEncoder().encodeToString(cipher.encrypt(plain))
-        store.edit { it[key] = stored }
+        write(auth)
         state.value = auth
     }
 
     override suspend fun clear() = lock.withLock {
-        store.edit { it.remove(key) }
+        store.edit {
+            it.remove(key)
+            it.remove(formatKey)
+        }
         state.value = null
     }
 
+    private suspend fun write(auth: Auth) {
+        val plain = "${auth.server}\n${auth.token}".toByteArray()
+        val stored = Base64.getEncoder().encodeToString(cipher.encrypt(plain))
+        store.edit {
+            it[key] = stored
+            it[formatKey] = FORMAT
+        }
+    }
+
     private suspend fun load(): Auth? {
-        val stored = store.data.first()[key] ?: return null
+        val prefs = store.data.first()
+        val stored = prefs[key] ?: return null
         val auth = runCatching {
             val plain = cipher.decrypt(Base64.getDecoder().decode(stored)).toString(Charsets.UTF_8)
             val (server, token) = plain.split("\n", limit = 2)
             Auth(server, token)
         }.getOrNull()
-        if (auth == null) store.edit { it.remove(key) }
-        return auth
+        if (auth == null) {
+            store.edit { it.remove(key) }
+            return null
+        }
+        if (prefs[formatKey] == FORMAT) return auth
+        val migrated = auth.copy(server = auth.server.trimEnd('/') + LEGACY_API_PATH)
+        write(migrated)
+        return migrated
+    }
+
+    private companion object {
+        const val FORMAT = 2
     }
 }

@@ -11,6 +11,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 
+/** Where v0.1.0 served the API, relative to the bare server address it stored. */
+const val LEGACY_API_PATH = "/rest/googlereader"
+
 data class Auth(val server: String, val token: String) {
     override fun toString() = "Auth(server=$server, token=***)"
 }
@@ -110,7 +113,7 @@ class GReaderApi(
     private fun currentAuth(): Auth = auth() ?: throw ApiError.BadCredentials
 
     private fun root(server: String): HttpUrl =
-        (server.trim().trimEnd('/') + "/rest/googlereader/").toHttpUrlOrNull()
+        (server.trim().trimEnd('/') + "/").toHttpUrlOrNull()
             ?: throw ApiError.Unreachable
 
     private fun apiUrl(a: Auth, path: String, encoded: Boolean = false): HttpUrl {

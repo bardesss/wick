@@ -22,6 +22,25 @@ class FaviconTest {
     }
 
     @Test
+    fun site_root_drops_a_known_api_path() {
+        assertEquals("https://h.example", siteRoot("https://h.example/rest/googlereader"))
+        assertEquals("https://h.example", siteRoot("https://h.example/api/greader.php"))
+        assertEquals("https://h.example", siteRoot("https://h.example"))
+        assertEquals("https://h.example/sub", siteRoot("https://h.example/sub/REST/GoogleReader/"))
+        assertEquals("https://h.example/sub", siteRoot("https://h.example/sub/API/greader.php"))
+        assertEquals("https://h.example/miniflux", siteRoot("https://h.example/miniflux"))
+    }
+
+    @Test
+    fun relative_icon_resolves_against_the_site_of_the_api_url() {
+        val icon = "rest/feed/favicon/3"
+        val expected = "https://h.example/rest/feed/favicon/3"
+        assertEquals(expected, resolveIcon("https://h.example/rest/googlereader", icon))
+        assertEquals(expected, resolveIcon("https://h.example/api/greader.php", icon))
+        assertEquals(expected, resolveIcon("https://h.example", icon))
+    }
+
+    @Test
     fun relative_icon_with_url_in_query_is_still_relative() {
         assertEquals(
             "https://feeds.example.com/rest/feed/favicon/3?from=https://site.example.org/",
