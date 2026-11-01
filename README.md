@@ -46,6 +46,10 @@ Wick shows one list of headlines. You read it top to bottom, and items drop off 
 
 - Android 8.0 or newer.
 - A feed server that offers the Google Reader API. Tested with CommaFeed.
+- The Google Reader API URL of that server, for example:
+  - CommaFeed: `https://your.server/rest/googlereader`
+  - FreshRSS: `https://your.server/api/greader.php`
+  - Miniflux: `https://your.server`
 - Your username and API key from that server (in CommaFeed: Profile).
 
 ## Install
@@ -60,7 +64,7 @@ You can also download the APK from the [latest release](https://github.com/barde
 
 ## First run
 
-Enter your server address, your username and your API key. Wick then loads your unread items.
+Enter the Google Reader API URL of your server, your username and your API key. Wick then loads your unread items.
 
 ## Building from source
 
