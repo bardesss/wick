@@ -15,7 +15,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
 private const val PAGE_SIZE = 1000
-private const val MAX_ITEMS = 1000
+/** The most rows a snapshot holds. */
+const val MAX_ITEMS = 1000
 
 private class Fetched(
     val feeds: List<Feed>,

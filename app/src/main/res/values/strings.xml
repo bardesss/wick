@@ -10,6 +10,7 @@
     <string name="settings">Settings</string>
     <string name="list_all_unread">All unread</string>
     <string name="caught_up_title">All caught up</string>
+    <string name="caught_up_checking">Checking for new items</string>
     <string name="caught_up_check">Check for new items</string>
     <plurals name="list_new_items">
         <item quantity="one">%d new</item>
@@ -44,6 +45,5 @@
     <string name="settings_links_default">Default app</string>
     <string name="settings_account">Account</string>
     <string name="settings_source">Source code</string>
-    <string name="settings_source_label">Open the project page</string>
     <string name="settings_sign_out">Sign out</string>
 </resources>

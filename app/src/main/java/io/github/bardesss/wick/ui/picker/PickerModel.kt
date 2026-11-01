@@ -51,17 +51,7 @@ fun buildPicker(feeds: List<FeedEntity>, counts: Map<String, Int>): List<PickerE
  * [selected] view and the folder that holds a selected feed always stay.
  */
 fun hideEmpty(entries: List<PickerEntry>, selected: StreamId): List<PickerEntry> {
-    var folder: String? = null
-    var selectedFolder: String? = null
-    for (e in entries) {
-        when {
-            e is PickerEntry.Folder -> folder = e.name
-            e is PickerEntry.Feed -> {
-                if (!e.indented) folder = null
-                if (selected == StreamId.Feed(e.id)) selectedFolder = folder
-            }
-        }
-    }
+    val selectedFolder = folderOfFeed(entries, selected)
     return entries.filter { e ->
         when (e) {
             is PickerEntry.All -> true
@@ -71,8 +61,31 @@ fun hideEmpty(entries: List<PickerEntry>, selected: StreamId): List<PickerEntry>
     }
 }
 
-/** Marks the folders in [collapsed] and leaves out their feeds. */
-fun foldPicker(entries: List<PickerEntry>, collapsed: Set<String>): List<PickerEntry> {
+/** The folder that holds the [selected] feed, null for a loose feed or another kind of view. */
+private fun folderOfFeed(entries: List<PickerEntry>, selected: StreamId): String? {
+    var folder: String? = null
+    for (e in entries) {
+        when {
+            e is PickerEntry.Folder -> folder = e.name
+            e is PickerEntry.Feed -> {
+                if (!e.indented) folder = null
+                if (selected == StreamId.Feed(e.id)) return folder
+            }
+        }
+    }
+    return null
+}
+
+/**
+ * Marks the folders in [collapsed] and leaves out their feeds, except for the folder that holds
+ * the [selected] feed: that view stays in sight.
+ */
+fun foldPicker(entries: List<PickerEntry>, collapsed: Set<String>, selected: StreamId = StreamId.All): List<PickerEntry> {
+    val folded = folderOfFeed(entries, selected)?.let { collapsed - it } ?: collapsed
+    return fold(entries, folded)
+}
+
+private fun fold(entries: List<PickerEntry>, collapsed: Set<String>): List<PickerEntry> {
     if (collapsed.isEmpty()) return entries
     val result = ArrayList<PickerEntry>(entries.size)
     var folded = false

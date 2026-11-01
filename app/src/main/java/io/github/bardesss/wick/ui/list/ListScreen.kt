@@ -85,6 +85,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
+import io.github.bardesss.wick.sync.MAX_ITEMS
 import io.github.bardesss.wick.ui.isWebUrl
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.picker.MarkAllArm
@@ -115,13 +116,27 @@ private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = Fon
 private val PillShape = RoundedCornerShape(16.dp)
 private val PillStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 13.sp)
 private const val ARM_TIMEOUT_MS = 4000L
+
+/** The gap must hold this long before the pill shows, since a row turns read a moment before the count drops. */
+const val PILL_DELAY_MS = 600L
+
+// the snapshot lands a moment after the refresh reports done
+private const val SETTLE_MS = 400L
 private const val FOOTER_KEY = 0
 
 /**
  * How many unread items the header counts that the list does not show. Background sync moves the
- * count; the list only changes on a refresh.
+ * count; the list only changes on a refresh. A full snapshot ([snapshotRows] at the limit) cannot
+ * take more, and a refresh that did not close the gap leaves the count it ended on in
+ * [suppressedAt] until the count moves again; neither is worth offering a refresh for.
  */
-fun newItems(count: Int, unreadRowsInSnapshot: Int): Int = (count - unreadRowsInSnapshot).coerceAtLeast(0)
+fun newItems(count: Int, unreadRowsInSnapshot: Int, snapshotRows: Int = 0, suppressedAt: Int? = null): Int = when {
+    snapshotRows >= MAX_ITEMS || count == suppressedAt -> 0
+    else -> (count - unreadRowsInSnapshot).coerceAtLeast(0)
+}
+
+/** A refresh that left the gap no smaller than it found it, so another one would not help either. */
+fun refreshGainedNothing(gapBefore: Int, gapAfter: Int): Boolean = gapBefore > 0 && gapAfter >= gapBefore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -329,20 +344,50 @@ fun ListContent(
                 )
             }
             val pull = rememberPullToRefreshState()
-            val newCount by remember(rows, count) {
+            val gap by remember(rows, count) {
                 derivedStateOf {
-                    if (rows == null) 0 else newItems(count, rows.count { it.id !in read.value })
+                    if (rows == null) 0 else newItems(count, rows.count { it.id !in read.value }, rows.size)
+                }
+            }
+            val gapNow by rememberUpdatedState(gap)
+            val countNow by rememberUpdatedState(count)
+            // a refresh that did not close the gap hides the pill until the count moves
+            var suppressedAt by remember { mutableStateOf<Int?>(null) }
+            var settling by remember { mutableStateOf(false) }
+            var gapBefore by remember { mutableIntStateOf(0) }
+            LaunchedEffect(refreshing) {
+                if (refreshing) {
+                    gapBefore = gapNow
+                    settling = true
+                } else if (settling) {
+                    delay(SETTLE_MS)
+                    if (refreshGainedNothing(gapBefore, gapNow)) suppressedAt = countNow
+                    settling = false
+                }
+            }
+            LaunchedEffect(count) { if (suppressedAt != count) suppressedAt = null }
+            val newCount = if (suppressedAt == count) 0 else gap
+            // the pill shows once the gap has held for a moment while the list is still, and goes at once
+            val scrolling = listState.isScrollInProgress
+            val busy = refreshing || settling
+            var pillShown by remember { mutableStateOf(false) }
+            LaunchedEffect(newCount > 0, scrolling, busy) {
+                if (newCount <= 0) {
+                    pillShown = false
+                } else if (!pillShown && !scrolling && !busy) {
+                    delay(PILL_DELAY_MS)
+                    pillShown = true
                 }
             }
             // the pill keeps its place while a refresh runs, so the list does not move until the new snapshot is in
             val pillCount = remember { intArrayOf(0) }
             if (newCount > 0) pillCount[0] = newCount
             AnimatedVisibility(
-                visible = newCount > 0,
+                visible = pillShown,
                 enter = if (reducedMotion) EnterTransition.None else fadeIn(tween(120)) + expandVertically(tween(160)),
                 exit = if (reducedMotion) ExitTransition.None else fadeOut(tween(120)) + shrinkVertically(tween(160)),
             ) {
-                NewItemsPill(pillCount[0], enabled = !refreshing, onClick = onRefresh)
+                NewItemsPill(pillCount[0], enabled = !busy, onClick = onRefresh)
             }
             PullToRefreshBox(
                 isRefreshing = refreshing,

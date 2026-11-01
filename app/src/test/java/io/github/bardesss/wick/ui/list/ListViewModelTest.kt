@@ -510,11 +510,7 @@ class ListViewModelTest {
         assertTrue(vm.rows.value.isNullOrEmpty())
 
         vm.markAllRead()
-        repeat(150) {
-            runCurrent()
-            if (api.markAllCalls.isNotEmpty()) return@repeat
-            withContext(Dispatchers.IO) { Thread.sleep(10) }
-        }
+        awaitMarkAll()
 
         assertEquals(listOf(StreamId.All.raw to 151_000_000L), api.markAllCalls)
     }
@@ -533,6 +529,46 @@ class ListViewModelTest {
 
         assertNull(off.imageUrl)
         assertEquals("Text", off.text?.text)
+    }
+
+    @Test
+    fun mark_all_covers_stored_unread_items_newer_than_the_rows() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.refreshing) { !it }
+        // sync stored an item the list has not picked up
+        db.itemDao().upsertKeepingLocal(listOf(ItemEntity("n", "feed/1", "T n", null, 300, null, read = false)))
+
+        vm.markAllRead()
+        awaitMarkAll()
+
+        assertEquals(listOf(StreamId.All.raw to 301_000_000L), api.markAllCalls)
+    }
+
+    @Test
+    fun mark_all_with_nothing_stored_uses_now() = runTest(main, timeout = 30.seconds) {
+        engine()
+        val vm = vm()
+        ids(vm, emptyList())
+        settle(vm.refreshing) { !it }
+        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null, null)))
+        db.feedDao().replaceCounts(listOf(CountEntity("feed/1", 4)))
+        assertEquals(4, settle(vm.count) { it == 4 })
+
+        vm.markAllRead()
+        awaitMarkAll()
+
+        assertEquals(listOf(StreamId.All.raw to (now / 1000 + 1) * 1_000_000), api.markAllCalls)
+    }
+
+    private suspend fun TestScope.awaitMarkAll() {
+        repeat(150) {
+            runCurrent()
+            if (api.markAllCalls.isNotEmpty()) return
+            withContext(Dispatchers.IO) { Thread.sleep(10) }
+        }
     }
 
     @Test

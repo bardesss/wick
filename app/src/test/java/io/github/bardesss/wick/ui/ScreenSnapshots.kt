@@ -55,9 +55,11 @@ class ScreenSnapshots {
 
     private var shot: android.graphics.Bitmap? = null
 
-    private fun snap(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {
+    private fun snap(name: String, pillMs: Long = 0, content: @androidx.compose.runtime.Composable () -> Unit) {
         rule.setContent { WickTheme { content() } }
         rule.waitForIdle()
+        // a pill shows after a short delay
+        if (pillMs > 0) rule.mainClock.advanceTimeBy(pillMs)
         // captureToImage waits on a draw callback that never fires under Robolectric on this host, so draw the view directly.
         val view = rule.activity.window.decorView
         val bmp = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
@@ -314,7 +316,7 @@ class ScreenSnapshots {
     )
 
     @Test
-    fun list_pill() = snap("list_pill") {
+    fun list_pill() = snap("list_pill", pillMs = 1500) {
         // the header counts 3 more than the 4 unread rows on screen
         ListContent(
             viewName = "All unread",

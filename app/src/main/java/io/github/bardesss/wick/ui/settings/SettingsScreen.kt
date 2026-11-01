@@ -25,8 +25,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -64,7 +62,6 @@ fun SettingsScreen(
     version: String = BuildConfig.VERSION_NAME,
 ) {
     val context = LocalContext.current
-    val projectPage = stringResource(R.string.settings_source_label)
     Column(
         Modifier
             .fillMaxSize()
@@ -133,7 +130,6 @@ fun SettingsScreen(
                     color = WickColors.Meta,
                     modifier = Modifier
                         .heightIn(min = 48.dp)
-                        .semantics { contentDescription = projectPage }
                         .clickable(role = Role.Button) { openLink(context, PROJECT_URL, linkTarget ?: LinkTarget.InApp) }
                         .padding(horizontal = 12.dp)
                         .wrapContentHeight(Alignment.CenterVertically),

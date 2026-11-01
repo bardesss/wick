@@ -128,6 +128,19 @@ class PickerModelTest {
     }
 
     @Test
+    fun the_folder_of_the_selected_feed_stays_open() {
+        val entries = buildPicker(feeds, mapOf("feed/2" to 3, StreamId.Folder("Tech").raw to 3))
+
+        val folded = foldPicker(entries, setOf("Tech", "Food"), StreamId.Feed("feed/2"))
+
+        assertTrue(PickerEntry.Folder("Tech", 3) in folded)
+        assertTrue(folded.any { it is PickerEntry.Feed && it.id == "feed/2" })
+        // another folder stays folded, and so does Tech when the folder itself is the view
+        assertTrue(PickerEntry.Folder("Food", 0, collapsed = true) in folded)
+        assertTrue(PickerEntry.Folder("Tech", 3, collapsed = true) in foldPicker(entries, setOf("Tech"), StreamId.Folder("Tech")))
+    }
+
+    @Test
     fun nothing_collapsed_leaves_the_list_alone() {
         val entries = buildPicker(feeds, emptyMap())
 

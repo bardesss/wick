@@ -35,6 +35,16 @@ class LeadImageTest {
     }
 
     @Test
+    fun zero_sized_and_hidden_images_are_skipped() {
+        val html = "<img src=\"https://t.x/a.gif\" width=\"0\">" +
+            "<img src=\"https://t.x/b.gif\" height=\"0\">" +
+            "<img src=\"https://t.x/c.gif\" style=\"border:0; Display : None\">" +
+            "<img src=\"https://e.x/real.jpg\" style=\"max-width:100%\">"
+
+        assertEquals("https://e.x/real.jpg", leadImageUrl(html, null))
+    }
+
+    @Test
     fun anything_but_http_is_ignored() {
         val html = "<img src=\"data:image/png;base64,AAAA\"><img src=\"ftp://e.x/a.jpg\">" +
             "<img src=\"file:///sdcard/a.jpg\"><img src=\"http://e.x/ok.jpg\">"

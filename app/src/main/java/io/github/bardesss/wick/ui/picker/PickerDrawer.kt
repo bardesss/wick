@@ -180,15 +180,15 @@ private fun EntryRow(
     Row(
         modifier
             .fillMaxWidth()
-            .padding(top = top)
-            .semantics { this.selected = selected },
+            .padding(top = top),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (folder != null) FolderChevron(folder, animate) { onToggleFolder(folder.name) }
         Row(
             Modifier
                 .weight(1f)
-                .clickable(onClick = onClick)
+                .semantics { this.selected = selected }
+                .clickable(role = Role.Button, onClick = onClick)
                 .padding(start = if (folder != null) 8.dp else start, end = 22.dp, top = 11.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

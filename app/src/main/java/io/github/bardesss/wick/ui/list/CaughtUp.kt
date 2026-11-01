@@ -3,14 +3,18 @@ package io.github.bardesss.wick.ui.list
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -77,14 +81,24 @@ fun CaughtUp(onRefresh: () -> Unit, refreshing: Boolean, modifier: Modifier = Mo
                 .testTag("check_new"),
             contentAlignment = Alignment.Center,
         ) {
-            if (refreshing) {
-                CircularProgressIndicator(
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.caught_up_check),
+                    style = ButtonStyle,
                     color = WickColors.Amber,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.alpha(if (refreshing) 0.5f else 1f),
                 )
-            } else {
-                Text(stringResource(R.string.caught_up_check), style = ButtonStyle, color = WickColors.Amber)
+                if (refreshing) {
+                    val checking = stringResource(R.string.caught_up_checking)
+                    CircularProgressIndicator(
+                        color = WickColors.Amber,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier
+                            .padding(start = 10.dp)
+                            .size(16.dp)
+                            .semantics { contentDescription = checking },
+                    )
+                }
             }
         }
     }

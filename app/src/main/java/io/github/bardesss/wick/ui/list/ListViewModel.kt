@@ -153,7 +153,7 @@ class ListViewModel(
         val entries = buildPicker(feeds, counts).map { e ->
             if (e is PickerEntry.Feed) e.copy(iconUrl = resolveIcon(server, e.iconUrl)) else e
         }
-        foldPicker(if (hide) hideEmpty(entries, selected) else entries, collapsed)
+        foldPicker(if (hide) hideEmpty(entries, selected) else entries, collapsed, selected)
     }
         .flowOn(work)
         .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(PickerEntry.All(0)))
@@ -220,9 +220,9 @@ class ListViewModel(
     }
 
     /**
-     * Marks the whole view read on the server, up to the newest row loaded, then refreshes.
-     * Items that arrived after that stay unread. With no rows loaded (the header can count items
-     * the list does not show yet) the newest unread item stored for the view stands in, or now.
+     * Marks the whole view read on the server. The cutoff is the newest of the rows loaded and the
+     * unread items stored for the view, so it covers what the header counts, whether or not the
+     * list has caught up. With neither, it is now. Items that arrive later stay unread.
      */
     fun markAllRead() {
         val v = _view.value
@@ -230,11 +230,8 @@ class ListViewModel(
         if (loaded.isNullOrEmpty() && count.value <= 0) return
         viewModelScope.launch {
             val feedIds = feedIdsOf(v, feedDao.feedsNow())
-            val newest = if (loaded.isNullOrEmpty()) {
-                itemDao.newestUnreadSec(feedIds) ?: (clock() / 1000)
-            } else {
-                loaded.maxOf { it.publishedSec }
-            }
+            val newest = listOfNotNull(loaded?.maxOfOrNull { it.publishedSec }, itemDao.newestUnreadSec(feedIds)).maxOrNull()
+                ?: (clock() / 1000)
             queue.markAll(v, feedIds, newest)
             // the refresh must see the mark-all in the queue
             queue.awaitApplied()
