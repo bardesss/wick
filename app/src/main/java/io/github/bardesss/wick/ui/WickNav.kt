@@ -38,8 +38,8 @@ fun WickNav(container: AppContainer) {
     val auth by container.creds.authFlow.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     // the list is gone while the account is wiped, so nothing can write to the database meanwhile;
-    // not saved, since the sign out dies with the process and a restore must not wait for it
-    var signingOut by remember { mutableStateOf(false) }
+    // held by the container, so it lasts through a rotation but not past the process the sign out runs in
+    val signingOut by container.signingOut.collectAsStateWithLifecycle()
     val session: SessionScope = viewModel { SessionScope(createSavedStateHandle()) }
     // view models for the signed in session are created from the activity's extras, so their
     // saved state lives with the activity while the session store decides how long they live
@@ -49,7 +49,7 @@ fun WickNav(container: AppContainer) {
     LaunchedEffect(auth == null) {
         if (auth == null) {
             settingsOpen = false
-            signingOut = false
+            container.signingOut.value = false
             session.end()
         }
     }
@@ -79,7 +79,7 @@ fun WickNav(container: AppContainer) {
                 if (settingsOpen) {
                     BackHandler { settingsOpen = false }
                     SettingsRoute(container, auth?.server.orEmpty()) {
-                        signingOut = true
+                        container.signingOut.value = true
                         session.end()
                         container.appScope.launch {
                             try {
@@ -98,7 +98,7 @@ fun WickNav(container: AppContainer) {
                                     forgetAccount = { container.settings.setAccount(null) },
                                 )
                             } finally {
-                                signingOut = false
+                                container.signingOut.value = false
                             }
                         }
                     }

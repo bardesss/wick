@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
@@ -54,8 +55,11 @@ class AppContainer(val context: Context) {
             CoroutineExceptionHandler { _, e -> Log.e(LOG_TAG, "uncaught error in app scope", e) },
     )
 
+    /** True while a sign out wipes the account. Outlives a rotation, not the process. */
+    val signingOut = MutableStateFlow(false)
+
     // a cap on the whole call, so a server that trickles its answer cannot hold a sync forever
-    val http: OkHttpClient by lazy { OkHttpClient.Builder().callTimeout(60, TimeUnit.SECONDS).build() }
+    val http: OkHttpClient by lazy { OkHttpClient.Builder().callTimeout(5, TimeUnit.MINUTES).build() }
 
     val api: ReaderApi by lazy {
         if (BuildConfig.FAKE_ENABLED && FakeServerMode.active) FakeServerMode.Api() else GReaderApi(http) { creds.auth() }
