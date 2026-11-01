@@ -3,7 +3,9 @@ package io.github.bardesss.wick.ui.list
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -23,12 +27,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -49,13 +55,22 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,6 +78,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
+import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.isWebUrl
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.picker.MarkAllArm
@@ -79,11 +95,19 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private val CountStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 14.sp, fontFeatureSettings = "tnum")
 private val NoteStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
 private val ToastStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.5.sp)
 private val ToastShape = RoundedCornerShape(12.dp)
+private val FlameSize = 28.dp
+private val TapTarget = 48.dp
+private val MarkAllHeight = 32.dp
+private val MarkAllShape = RoundedCornerShape(18.dp)
+private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp)
+private val FOOTER_SLACK = 16.dp
+private const val ARM_TIMEOUT_MS = 4000L
 private const val FOOTER_KEY = 0
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,6 +154,16 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     LaunchedEffect(drawerState) {
         snapshotFlow { drawerState.currentValue }.collect { if (it == DrawerValue.Closed) arm.disarm() }
     }
+    // an armed "Mark all read" is dropped after a pause, and when the list moves
+    LaunchedEffect(arm.armed) {
+        if (arm.armed) {
+            delay(ARM_TIMEOUT_MS)
+            arm.disarm()
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { if (it) arm.disarm() }
+    }
     val snackbar = remember { SnackbarHostState() }
     val toast = remember { arrayOfNulls<Job>(1) }
     val markedRead = stringResource(R.string.list_marked_read)
@@ -137,10 +171,11 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     var sheetId by rememberSaveable { mutableStateOf<String?>(null) }
     val sheetKept = remember { arrayOfNulls<RowModel>(1) }
 
-    val open = remember(vm, context) {
+    val linkTarget by vm.linkTarget.collectAsStateWithLifecycle(LinkTarget.InApp)
+    val open = remember(vm, context, linkTarget) {
         { row: RowModel ->
             row.url?.takeIf(::isWebUrl)?.let { url ->
-                openLink(context, url)
+                openLink(context, url, linkTarget)
                 vm.open(row.id)
             }
             Unit
@@ -156,18 +191,16 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         armed = arm.armed,
         animate = !reducedMotion,
         onSelect = { v ->
+            // a view switch must not leave an armed mark all to confirm against the new view
+            arm.disarm()
             vm.select(v)
             scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
         },
         onMarkAll = {
-            if (arm.armed) {
-                if (arm.confirm()) {
-                    haptics.tick()
-                    vm.markAllRead()
-                    scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
-                }
-            } else if (canMarkAll && count > 0) {
-                arm.arm()
+            if (arm.tap(canMarkAll && count > 0)) {
+                haptics.tick()
+                vm.markAllRead()
+                scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
             }
         },
         onSettings = {
@@ -186,6 +219,14 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         listState = listState,
         onRefresh = vm::refresh,
         onOpenPicker = { scope.launch { drawerState.show(open = true, animate = !reducedMotion) } },
+        canMarkAll = canMarkAll,
+        markArmed = arm.armed,
+        onMarkAll = {
+            if (arm.tap(canMarkAll && count > 0)) {
+                haptics.tick()
+                vm.markAllRead()
+            }
+        },
         onOpen = open,
         onFrame = vm::onVisible,
         onShowText = { row -> sheetId = row.id },
@@ -214,6 +255,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
             row = sheetRow,
             body = body,
             nowSec = nowSec,
+            linkTarget = linkTarget,
             sheetState = sheetState,
             onOpen = {
                 open(sheetRow)
@@ -240,11 +282,16 @@ fun ListContent(
     onOpenPicker: () -> Unit,
     onOpen: (RowModel) -> Unit,
     onFrame: (ListFrame) -> Boolean,
+    canMarkAll: Boolean = true,
+    markArmed: Boolean = false,
+    onMarkAll: () -> Unit = {},
     onShowText: (RowModel) -> Unit = {},
     onToggle: (RowModel) -> Unit = {},
     onSwipeTick: () -> Unit = {},
     reducedMotion: Boolean = false,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
+    /** The state behind the indicator of a pull that starts on the footer; a test can read it. */
+    footerPullState: PullToRefreshState = rememberPullToRefreshState(),
     /** Fixed sideways offsets in px by row id, for previews. */
     swipePreview: Map<String, Float> = emptyMap(),
 ) {
@@ -264,7 +311,7 @@ fun ListContent(
 
     Box(Modifier.fillMaxSize().background(WickColors.Night)) {
         Column(Modifier.fillMaxSize()) {
-            Header(viewName, count, animate = !reducedMotion, onOpenPicker)
+            Header(viewName, count, animate = !reducedMotion, canMarkAll, markArmed, onMarkAll, onOpenPicker)
             if (message != null) {
                 Text(
                     message,
@@ -274,13 +321,48 @@ fun ListContent(
                 )
             }
             val pull = rememberPullToRefreshState()
+            val rowCount by rememberUpdatedState(rows?.size ?: -1)
+            val refreshingNow by rememberUpdatedState(refreshing)
+            val refreshNow by rememberUpdatedState(onRefresh)
+            val pullScope = rememberCoroutineScope()
+            val density = LocalDensity.current
+            // a pull that starts on the footer has its own state and indicator, apart from the box's
+            var footerOwned by remember { mutableStateOf(false) }
+            val footerBusy = footerOwned && refreshing
+            LaunchedEffect(refreshing) { if (!refreshing) footerOwned = false }
+            LaunchedEffect(footerBusy) {
+                if (footerBusy) footerPullState.animateToThreshold() else if (!refreshingNow) footerPullState.animateToHidden()
+            }
+            val footerPull = remember(listState, footerPullState) {
+                val slackPx = with(density) { FOOTER_SLACK.toPx() }
+                FooterPull(
+                    state = footerPullState,
+                    scope = pullScope,
+                    thresholdPx = with(density) { PullToRefreshDefaults.PositionalThreshold.toPx() },
+                    // the footer is the first item on screen and has hardly moved up
+                    active = {
+                        listState.firstVisibleItemIndex == rowCount &&
+                            listState.firstVisibleItemScrollOffset <= slackPx
+                    },
+                    refreshing = { refreshingNow },
+                    onRefresh = {
+                        footerOwned = true
+                        refreshNow()
+                    },
+                )
+            }
+            // the footer pull sits above the box, so it sees every drag and fling first
+            Box(Modifier.fillMaxSize().nestedScroll(footerPull)) {
             PullToRefreshBox(
                 isRefreshing = refreshing,
-                onRefresh = onRefresh,
+                onRefresh = {
+                    footerOwned = false
+                    onRefresh()
+                },
                 state = pull,
                 modifier = Modifier.fillMaxSize(),
                 indicator = {
-                    PullToRefreshDefaults.Indicator(
+                    if (!footerBusy) PullToRefreshDefaults.Indicator(
                         state = pull,
                         isRefreshing = refreshing,
                         containerColor = WickColors.Raised,
@@ -333,6 +415,14 @@ fun ListContent(
                     }
                 }
             }
+            PullToRefreshDefaults.Indicator(
+                state = footerPullState,
+                isRefreshing = footerBusy,
+                containerColor = WickColors.Raised,
+                color = WickColors.Amber,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+            }
         }
         SnackbarHost(
             snackbar,
@@ -354,7 +444,15 @@ fun ListContent(
 }
 
 @Composable
-private fun Header(name: String, count: Int, animate: Boolean, onClick: () -> Unit) {
+private fun Header(
+    name: String,
+    count: Int,
+    animate: Boolean,
+    canMarkAll: Boolean,
+    markArmed: Boolean,
+    onMarkAll: () -> Unit,
+    onClick: () -> Unit,
+) {
     val chooseView = stringResource(R.string.list_choose_view)
     var tick by remember { mutableStateOf(false) }
     var shown by remember { mutableIntStateOf(count) }
@@ -375,20 +473,81 @@ private fun Header(name: String, count: Int, animate: Boolean, onClick: () -> Un
         Modifier
             .fillMaxWidth()
             .testTag("header")
-            .clickable(interactionSource = null, indication = null, onClickLabel = chooseView, onClick = onClick)
+            .clickable(interactionSource = null, indication = null, onClickLabel = chooseView, role = Role.Button, onClick = onClick)
             .statusBarsPadding()
-            .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 10.dp),
+            .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 6.dp)
+            // the mark all tap target sets the height, so it does not change when that control hides
+            .heightIn(min = TapTarget),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            name,
-            style = WickText.Header.copy(letterSpacing = (-0.4).sp),
-            color = WickColors.Paper,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.alignByBaseline().weight(1f, fill = false),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(count.toString(), style = CountStyle, color = countColor, modifier = Modifier.alignByBaseline())
+        Row(Modifier.weight(1f)) {
+            Image(
+                painter = painterResource(R.drawable.ic_flame),
+                contentDescription = null,
+                // the flame stands 10% above the bottom of its box, so that edge goes on the title's baseline
+                modifier = Modifier.size(FlameSize).alignBy { (it.measuredHeight * 0.9f).roundToInt() },
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                name,
+                style = WickText.Header.copy(letterSpacing = (-0.4).sp),
+                color = WickColors.Paper,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.alignByBaseline().weight(1f, fill = false),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(count.toString(), style = CountStyle, color = countColor, modifier = Modifier.alignByBaseline())
+        }
+        if (count > 0 && canMarkAll) {
+            Spacer(Modifier.width(4.dp))
+            MarkAll(count, markArmed, animate, onMarkAll)
+        }
+    }
+}
+
+/** The check icon that turns into "Tap again to mark N read" once armed. */
+@Composable
+private fun MarkAll(count: Int, armed: Boolean, animate: Boolean, onClick: () -> Unit) {
+    val fillTarget = if (armed) WickColors.Amber else Color.Transparent
+    val inkTarget = if (armed) WickColors.Night else WickColors.Amber
+    val fill by animateColorAsState(fillTarget, tween(200), label = "fill")
+    val ink by animateColorAsState(inkTarget, tween(200), label = "ink")
+    val label = if (armed) stringResource(R.string.picker_mark_all_armed, count) else stringResource(R.string.picker_mark_all)
+    // the pill is smaller than a finger, so the tap target around it is 48dp
+    Box(
+        Modifier
+            .heightIn(min = TapTarget)
+            .widthIn(min = TapTarget)
+            .semantics { role = Role.Button; contentDescription = label }
+            .clickable(onClick = onClick)
+            .testTag("mark_all"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier
+                .height(MarkAllHeight)
+                .clip(MarkAllShape)
+                .background(if (animate) fill else fillTarget)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_done_all),
+                contentDescription = null,
+                tint = if (animate) ink else inkTarget,
+                modifier = Modifier.size(20.dp),
+            )
+            if (armed) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    stringResource(R.string.list_mark_all_armed, count),
+                    style = ArmedStyle,
+                    color = if (animate) ink else inkTarget,
+                    maxLines = 1,
+                )
+            }
+        }
     }
 }
 

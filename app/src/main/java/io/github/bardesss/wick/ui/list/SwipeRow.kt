@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -25,6 +27,8 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.bardesss.wick.ui.theme.WickColors
 import kotlinx.coroutines.Job
@@ -69,6 +73,9 @@ fun swipeAxis(dx: Float, dy: Float, slop: Float): SwipeAxis = when {
     else -> SwipeAxis.Undecided
 }
 
+/** The left edge where a rightward drag is left to the drawer: the system's back gesture inset and a margin past it. */
+fun edgeZonePx(gestureInsetPx: Int, marginPx: Float): Float = gestureInsetPx + marginPx
+
 /** Lets one row at a time follow a finger. Not state: nothing draws from it. */
 class SwipeLock {
     private var owner: String? = null
@@ -84,6 +91,7 @@ class SwipeLock {
     }
 }
 
+private val EdgeMargin = 24.dp
 private val IconSize = 20.dp
 private val IconInset = 24.dp
 private val FullOpacityAt = 70.dp
@@ -115,6 +123,7 @@ fun SwipeRow(
     onSwipe: (SwipeOutcome) -> Unit,
     modifier: Modifier = Modifier,
     startOffsetPx: Float = 0f,
+    gestureInsetPx: Int = WindowInsets.systemGestures.getLeft(LocalDensity.current, LocalLayoutDirection.current),
     content: @Composable (Modifier) -> Unit,
 ) {
     val offset = remember { mutableFloatStateOf(startOffsetPx) }
@@ -123,6 +132,9 @@ fun SwipeRow(
     val done by rememberUpdatedState(onSwipe)
     val still by rememberUpdatedState(reducedMotion)
     val settle = remember { arrayOfNulls<Job>(1) }
+    // a rightward drag that starts in the left edge belongs to the drawer; the system owns the inset itself
+    val density = LocalDensity.current
+    val edge by rememberUpdatedState(with(density) { edgeZonePx(gestureInsetPx, EdgeMargin.toPx()) })
 
     Box(
         modifier
@@ -131,6 +143,7 @@ fun SwipeRow(
                 val threshold = SwipeThreshold.toPx()
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    val fromEdge = down.position.x < edge
                     var dx = 0f
                     var dy = 0f
                     // watch until the touch shows its direction; a scroll that claims it first wins
@@ -143,6 +156,7 @@ fun SwipeRow(
                         when (swipeAxis(dx, dy, viewConfiguration.touchSlop)) {
                             SwipeAxis.Vertical -> return@awaitEachGesture
                             SwipeAxis.Horizontal -> {
+                                if (fromEdge && dx > 0f) return@awaitEachGesture
                                 if (!lock.claim(id)) return@awaitEachGesture
                                 change.consume()
                                 break

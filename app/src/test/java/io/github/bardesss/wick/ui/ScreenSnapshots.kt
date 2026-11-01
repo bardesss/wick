@@ -18,6 +18,9 @@ import io.github.bardesss.wick.ui.login.LoginMessages
 import io.github.bardesss.wick.ui.login.LoginState
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickTheme
+import androidx.compose.ui.graphics.toArgb
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -32,6 +35,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.platform.LocalDensity
 import io.github.bardesss.wick.html.htmlToAnnotated
 import io.github.bardesss.wick.api.StreamId
+import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.picker.MarkAllArm
 import io.github.bardesss.wick.ui.picker.PickerDrawer
 import io.github.bardesss.wick.ui.picker.PickerEntry
@@ -48,6 +52,8 @@ import io.github.bardesss.wick.ui.sheet.SummarySheet
 class ScreenSnapshots {
     @get:Rule
     val rule = createAndroidComposeRule<ComponentActivity>()
+
+    private var shot: android.graphics.Bitmap? = null
 
     private fun snap(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {
         rule.setContent { WickTheme { content() } }
@@ -67,6 +73,7 @@ class ScreenSnapshots {
         assertTrue(bmp.width > 0 && bmp.height > 0)
         val dir = File("build/snapshots").apply { mkdirs() }
         File(dir, "$name.png").outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        shot = bmp
     }
 
     @Test
@@ -134,6 +141,25 @@ class ScreenSnapshots {
     }
 
     @Test
+    fun list_armed() = snap("list_armed") {
+        ListContent(
+            viewName = "All unread",
+            count = 87,
+            message = null,
+            rows = sample,
+            read = remember { mutableStateOf(setOf("1", "4")) },
+            nowSec = now,
+            refreshing = false,
+            listState = rememberLazyListState(),
+            onRefresh = {},
+            onOpenPicker = {},
+            onOpen = {},
+            onFrame = { false },
+            markArmed = true,
+        )
+    }
+
+    @Test
     fun list_swipes() = snap("list_swipes") {
         // row 2 dragged right past the threshold, row 5 dragged left past it
         val px = with(LocalDensity.current) { 100.dp.toPx() }
@@ -165,7 +191,18 @@ class ScreenSnapshots {
     """.trimIndent()
 
     @OptIn(ExperimentalMaterial3Api::class)
-    private fun sheet(name: String, html: String?) = snap(name) {
+    private fun sheet(name: String, html: String?) {
+        snap(name) { SheetScreen(html) }
+        // the sheet sits on the bottom edge, and a long text stops short of the top
+        val bmp = shot!!
+        val raised = WickColors.Raised.toArgb()
+        assertEquals(raised, bmp.getPixel(bmp.width / 2, bmp.height - 1))
+        assertNotEquals(raised, bmp.getPixel(bmp.width / 2, bmp.height / 10))
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @androidx.compose.runtime.Composable
+    private fun SheetScreen(html: String?) {
         ListContent(
             viewName = "All unread",
             count = 87,
@@ -184,6 +221,7 @@ class ScreenSnapshots {
             row = sample[4],
             body = SheetBody.Ready(htmlToAnnotated(html)),
             nowSec = now,
+            linkTarget = LinkTarget.InApp,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             onOpen = {},
             onDismiss = {},
@@ -195,6 +233,9 @@ class ScreenSnapshots {
 
     @Test
     fun sheet_empty() = sheet("sheet_empty", null)
+
+    @Test
+    fun sheet_long() = sheet("sheet_long", article.repeat(6))
 
     @Test
     fun list_caught_up() = snap("list_caught_up") {
@@ -270,9 +311,11 @@ class ScreenSnapshots {
         SettingsScreen(
             oldestFirst = false,
             haptics = true,
+            linkTarget = LinkTarget.InApp,
             server = "https://feeds.example.com",
             onOldestFirst = {},
             onHaptics = {},
+            onLinkTarget = {},
             onSignOut = {},
             version = "0.1.0",
         )

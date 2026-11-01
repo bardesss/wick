@@ -18,6 +18,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.bardesss.wick.AppContainer
+import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.list.ListScreen
 import io.github.bardesss.wick.ui.list.ListViewModel
 import io.github.bardesss.wick.ui.login.LoginScreen
@@ -113,14 +114,18 @@ private fun SettingsRoute(container: AppContainer, server: String, onSignOut: ()
         .collectAsStateWithLifecycle(initialValue = null)
     val haptics by remember { container.settings.haptics.map<Boolean, Boolean?> { it } }
         .collectAsStateWithLifecycle(initialValue = null)
+    val linkTarget by remember { container.settings.linkTarget.map<LinkTarget, LinkTarget?> { it } }
+        .collectAsStateWithLifecycle(initialValue = null)
     // the app scope, so sign out finishes even after this page has left the screen
     val scope = container.appScope
     SettingsScreen(
         oldestFirst = oldestFirst,
         haptics = haptics,
+        linkTarget = linkTarget,
         server = server,
         onOldestFirst = { scope.launch { container.settings.setOldestFirst(it) } },
         onHaptics = { scope.launch { container.settings.setHaptics(it) } },
+        onLinkTarget = { scope.launch { container.settings.setLinkTarget(it) } },
         onSignOut = onSignOut,
     )
 }

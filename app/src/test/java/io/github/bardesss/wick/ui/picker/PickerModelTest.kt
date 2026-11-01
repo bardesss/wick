@@ -65,6 +65,22 @@ class PickerModelTest {
     }
 
     @Test
+    fun tap_arms_first_and_marks_on_the_second() {
+        val arm = MarkAllArm()
+        assertFalse(arm.tap(canMark = true))
+        assertTrue(arm.armed)
+        assertTrue(arm.tap(canMark = true))
+        assertFalse(arm.armed)
+    }
+
+    @Test
+    fun tap_does_not_arm_with_nothing_to_mark() {
+        val arm = MarkAllArm()
+        assertFalse(arm.tap(canMark = false))
+        assertFalse(arm.armed)
+    }
+
+    @Test
     fun mark_all_needs_two_taps_and_disarms_on_close() {
         val arm = MarkAllArm()
         assertFalse(arm.armed)

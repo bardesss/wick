@@ -18,6 +18,7 @@ class SettingsStoreTest {
         val s = store()
         assertFalse(s.oldestFirst.first())
         assertTrue(s.haptics.first())
+        assertEquals(LinkTarget.InApp, s.linkTarget.first())
     }
 
     @Test
@@ -34,6 +35,10 @@ class SettingsStoreTest {
     @Test
     fun settings_persist() = runBlocking {
         val s = store()
+        s.setLinkTarget(LinkTarget.DefaultApp)
+        assertEquals(LinkTarget.DefaultApp, s.linkTarget.first())
+        s.setLinkTarget(LinkTarget.InApp)
+        assertEquals(LinkTarget.InApp, s.linkTarget.first())
         s.setOldestFirst(true)
         s.setHaptics(false)
         assertTrue(s.oldestFirst.first())

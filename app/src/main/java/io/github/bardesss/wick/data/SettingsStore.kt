@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
+/** Where a link opens: a Custom Tab inside the app, or whatever app Android picks for it. */
+enum class LinkTarget { InApp, DefaultApp }
+
 class SettingsStore(private val store: DataStore<Preferences>) {
 
     private val oldestFirstKey = booleanPreferencesKey("oldest_first")
@@ -21,6 +24,16 @@ class SettingsStore(private val store: DataStore<Preferences>) {
 
     val oldestFirst: Flow<Boolean> = store.data.map { it[oldestFirstKey] ?: false }
     val haptics: Flow<Boolean> = store.data.map { it[hapticsKey] ?: true }
+
+    private val linkTargetKey = stringPreferencesKey("link_target")
+
+    val linkTarget: Flow<LinkTarget> = store.data.map {
+        if (it[linkTargetKey] == DEFAULT_APP) LinkTarget.DefaultApp else LinkTarget.InApp
+    }
+
+    suspend fun setLinkTarget(value: LinkTarget) {
+        store.edit { it[linkTargetKey] = if (value == LinkTarget.DefaultApp) DEFAULT_APP else IN_APP }
+    }
 
     suspend fun setOldestFirst(value: Boolean) {
         store.edit { it[oldestFirstKey] = value }
@@ -68,6 +81,8 @@ class SettingsStore(private val store: DataStore<Preferences>) {
 
     companion object {
         private const val ACCOUNT_FORMAT = 2
+        private const val IN_APP = "in_app"
+        private const val DEFAULT_APP = "default_app"
 
         fun create(context: Context) = SettingsStore(
             PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("settings") },
