@@ -40,6 +40,9 @@ class AppContainer(val context: Context) {
     val queueDao get() = db.queueDao()
     val snapshotDao get() = db.snapshotDao()
 
+    // Read at once and on the main thread (disk and Keystore), so the first frame already knows
+    // whether to show the login. That is a StrictMode violation, kept on purpose; startView() below
+    // does the same for the header.
     val creds: CredentialStore = KeystoreCredentialStore(context, KeystoreTokenCipher())
     val settings: SettingsStore by lazy { SettingsStore.create(context) }
 

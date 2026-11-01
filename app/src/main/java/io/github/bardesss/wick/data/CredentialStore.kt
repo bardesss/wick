@@ -4,9 +4,11 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
@@ -81,7 +83,10 @@ class KeystoreCredentialStore(
 ) : CredentialStore {
 
     constructor(context: Context, cipher: TokenCipher) : this(
-        PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("credentials") },
+        // a damaged file means signing in again, not a crash on every start
+        PreferenceDataStoreFactory.create(corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }) {
+            context.preferencesDataStoreFile("credentials")
+        },
         cipher,
     )
 

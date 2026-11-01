@@ -82,6 +82,50 @@ class ItemDaoTest {
     }
 
     @Test
+    fun upsert_keeps_items_covered_by_a_pending_mark_all_read() = runTest {
+        feeds.replaceAll(
+            listOf(
+                FeedEntity("f1", "One", "News", null, null),
+                FeedEntity("f2", "Two", null, null, null),
+            ),
+        )
+        items.upsertKeepingLocal(listOf(item("a", publishedSec = 100), item("late", publishedSec = 300), item("other", feedId = "f2")))
+        // mark all of the folder up to 200, as MarkQueue does it, and the server never hears of it
+        items.markReadWhere(listOf("f1"), 200)
+        queue.enqueueAll(PendingMarkAllEntity(streamRaw = "user/-/label/News", olderThanUsec = 201 * 1_000_000L))
+
+        items.upsertKeepingLocal(
+            listOf(
+                item("a", publishedSec = 100),
+                item("new", publishedSec = 150),
+                item("edge", publishedSec = 200),
+                item("late", publishedSec = 300),
+                item("other", feedId = "f2", publishedSec = 100),
+            ),
+        )
+
+        assertTrue(row("a").read)
+        assertTrue(row("new").read)
+        assertTrue(row("edge").read)
+        assertFalse(row("late").read)
+        assertFalse(row("other").read)
+    }
+
+    @Test
+    fun a_pending_item_mark_after_a_mark_all_wins_on_upsert() = runTest {
+        items.upsertKeepingLocal(listOf(item("a", publishedSec = 100)))
+        items.markReadWhere(null, 200)
+        queue.enqueueAll(PendingMarkAllEntity(streamRaw = "user/-/state/com.google/reading-list", olderThanUsec = 201 * 1_000_000L))
+        items.setRead("a", read = false, manualUnread = true)
+        queue.enqueue(PendingMarkEntity("a", read = false, queuedAt = 1))
+
+        items.upsertKeepingLocal(listOf(item("a", publishedSec = 100)))
+
+        assertFalse(row("a").read)
+        assertTrue(row("a").manualUnread)
+    }
+
+    @Test
     fun unreadIds_order_respects_oldestFirst() = runTest {
         items.upsertKeepingLocal(
             listOf(
