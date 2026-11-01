@@ -3,7 +3,6 @@ package io.github.bardesss.wick.baselineprofile
 import android.content.Intent
 import androidx.benchmark.macro.MacrobenchmarkScope
 import androidx.test.uiautomator.By
-import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.Until
 
 const val TARGET_PACKAGE = "io.github.bardesss.wick.bench"

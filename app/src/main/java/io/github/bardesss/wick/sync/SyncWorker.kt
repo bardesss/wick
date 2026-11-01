@@ -14,12 +14,12 @@ import androidx.work.WorkManager
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import io.github.bardesss.wick.LOG_TAG
 import io.github.bardesss.wick.api.Auth
 import io.github.bardesss.wick.db.QueueDao
 import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
 
-private const val TAG = "Wick"
 private const val KEY_FLUSH_ONLY = "flushOnly"
 
 /**
@@ -47,7 +47,7 @@ class SyncWorker(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "background sync failed", e)
+            Log.e(LOG_TAG, "background sync failed", e)
         }
         return Result.success()
     }
@@ -75,8 +75,8 @@ class SyncWorkerFactory(
 }
 
 object SyncWork {
-    const val SYNC = "sync"
-    const val FLUSH = "flush"
+    internal const val SYNC = "sync"
+    internal const val FLUSH = "flush"
 
     private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 

@@ -33,12 +33,12 @@ object FakeServerMode {
         ).split(' ')
 
     private val feeds = listOf(
-        Feed("feed/1", "Hacker Dispatch", "Tech", null, null),
-        Feed("feed/2", "Kernel Weekly", "Tech", null, null),
-        Feed("feed/3", "The Long Read", "News", null, null),
-        Feed("feed/4", "Daily Wire Service", "News", null, null),
-        Feed("feed/5", "Pixel Notes", null, null, null),
-        Feed("feed/6", "Field Recordings", null, null, null),
+        Feed("feed/1", "Hacker Dispatch", "Tech", null),
+        Feed("feed/2", "Kernel Weekly", "Tech", null),
+        Feed("feed/3", "The Long Read", "News", null),
+        Feed("feed/4", "Daily Wire Service", "News", null),
+        Feed("feed/5", "Pixel Notes", null, null),
+        Feed("feed/6", "Field Recordings", null, null),
     )
 
     private val items by lazy { build(500) }
@@ -70,7 +70,7 @@ object FakeServerMode {
         db.clearAllTables()
         container.creds.save(Auth("https://fake.invalid", "fake"))
         val list = items.take(count)
-        container.feedDao.replaceAll(feeds.map { FeedEntity(it.id, it.title, it.folder, it.htmlUrl, it.iconUrl) })
+        container.feedDao.replaceAll(feeds.map { FeedEntity(it.id, it.title, it.folder, it.iconUrl) })
         container.feedDao.replaceCounts(countsOf(list))
         container.itemDao.upsertKeepingLocal(
             list.mapIndexed { i, it ->

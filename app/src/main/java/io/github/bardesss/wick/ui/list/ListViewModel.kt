@@ -9,13 +9,14 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.bardesss.wick.AppContainer
+import io.github.bardesss.wick.LOG_TAG
 import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.StreamId
+import io.github.bardesss.wick.api.feedIds
 import io.github.bardesss.wick.data.CredentialStore
 import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.FeedDao
-import io.github.bardesss.wick.db.FeedEntity
 import io.github.bardesss.wick.db.ItemDao
 import io.github.bardesss.wick.db.LocalState
 import io.github.bardesss.wick.db.SnapshotDao
@@ -24,11 +25,12 @@ import io.github.bardesss.wick.html.htmlToAnnotated
 import io.github.bardesss.wick.html.leadImageUrl
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
-import io.github.bardesss.wick.ui.login.LoginMessages
 import io.github.bardesss.wick.ui.picker.PickerEntry
 import io.github.bardesss.wick.ui.picker.buildPicker
 import io.github.bardesss.wick.ui.picker.foldPicker
-import io.github.bardesss.wick.ui.picker.hideEmpty
+import io.github.bardesss.wick.ui.picker.withoutEmpty
+import io.github.bardesss.wick.ui.Note
+import io.github.bardesss.wick.ui.note
 import io.github.bardesss.wick.ui.resolveIcon
 import io.github.bardesss.wick.ui.sheet.SheetBody
 import kotlinx.coroutines.CancellationException
@@ -64,7 +66,6 @@ data class RowModel(
     val publishedSec: Long,
 )
 
-private const val TAG = "Wick"
 private const val KEY_VIEW = "view"
 private const val STALE_MS = 30 * 60_000L
 
@@ -153,7 +154,7 @@ class ListViewModel(
         val entries = buildPicker(feeds, counts).map { e ->
             if (e is PickerEntry.Feed) e.copy(iconUrl = resolveIcon(server, e.iconUrl)) else e
         }
-        foldPicker(if (hide) hideEmpty(entries, selected) else entries, collapsed, selected)
+        foldPicker(if (hide) withoutEmpty(entries, selected) else entries, collapsed, selected)
     }
         .flowOn(work)
         .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(PickerEntry.All(0)))
@@ -163,10 +164,10 @@ class ListViewModel(
     /** True while the pull indicator should show. */
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
-    private val _message = MutableStateFlow<String?>(null)
+    private val _message = MutableStateFlow<Note?>(null)
 
     /** A quiet note under the header after a refresh failed. */
-    val message: StateFlow<String?> = _message.asStateFlow()
+    val message: StateFlow<Note?> = _message.asStateFlow()
 
     init {
         savedState[KEY_VIEW] = _view.value.raw
@@ -213,7 +214,7 @@ class ListViewModel(
         appScope.launch { settings.setLastView(view.raw) }
         viewModelScope.launch {
             // show what is stored for the view at once; the refresh then brings it up to date
-            val feedIds = feedIdsOf(view, feedDao.feedsNow())
+            val feedIds = view.feedIds(feedDao.feedsNow())
             replaceSnapshot(itemDao.unreadIds(feedIds, settings.oldestFirst.first()), writtenAtMs = 0, view)
             startRefresh(indicator = true)
         }
@@ -229,7 +230,7 @@ class ListViewModel(
         val loaded = rows.value
         if (loaded.isNullOrEmpty() && count.value <= 0) return
         viewModelScope.launch {
-            val feedIds = feedIdsOf(v, feedDao.feedsNow())
+            val feedIds = v.feedIds(feedDao.feedsNow())
             val newest = listOfNotNull(loaded?.maxOfOrNull { it.publishedSec }, itemDao.newestUnreadSec(feedIds)).maxOrNull()
                 ?: (clock() / 1000)
             queue.markAll(v, feedIds, newest)
@@ -318,6 +319,8 @@ class ListViewModel(
                     again = false
                     val v = _view.value
                     val result = try {
+                        // marks made just before, say right before a view switch, must be in Room first
+                        queue.awaitApplied()
                         sync.refresh(v, settings.oldestFirst.first())
                     } catch (e: CancellationException) {
                         throw e
@@ -333,7 +336,7 @@ class ListViewModel(
                             if (e == ApiError.BadCredentials) {
                                 creds.clear()
                             } else {
-                                _message.value = if (e is ApiError) LoginMessages.of(e) else LoginMessages.UNREACHABLE
+                                _message.value = (e as? ApiError ?: ApiError.Unreachable).note()
                             }
                         },
                     )
@@ -355,16 +358,10 @@ class ListViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "could not store the new list", e)
+            Log.w(LOG_TAG, "could not store the new list", e)
         } finally {
             applying = false
         }
-    }
-
-    private fun feedIdsOf(view: StreamId, feeds: List<FeedEntity>): List<String>? = when (view) {
-        StreamId.All -> null
-        is StreamId.Folder -> feeds.filter { it.folder == view.name }.map { it.id }
-        is StreamId.Feed -> listOf(view.id)
     }
 
     private fun idsWhere(list: List<LocalState>, test: (LocalState) -> Boolean): Set<String> =

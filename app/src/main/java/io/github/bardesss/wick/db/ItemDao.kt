@@ -5,15 +5,19 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
+import io.github.bardesss.wick.api.StreamId
 
 data class LocalState(val id: String, val read: Boolean, val manualUnread: Boolean)
 
 data class ItemFeed(val id: String, val feedId: String)
 
-private const val CHUNK = 500
+/** How many ids go into one IN (...) list, below SQLite's limit on query arguments. */
+internal const val CHUNK = 500
+
+/** The items a pending mark-all marks read: of [feeds] (all when null) and published by [newestSec]. */
+private class MarkAllCover(val feeds: Set<String>?, val newestSec: Long) {
+    fun covers(item: ItemEntity) = (feeds == null || item.feedId in feeds) && item.publishedSec <= newestSec
+}
 
 @Dao
 abstract class ItemDao {
@@ -26,11 +30,14 @@ abstract class ItemDao {
     @Query("SELECT itemId FROM PendingMarkEntity WHERE itemId IN (:ids)")
     protected abstract suspend fun pendingAmong(ids: List<String>): List<String>
 
-    @Query(
-        "SELECT i.*, f.title AS feedTitle, f.iconUrl AS feedIconUrl FROM ItemEntity i " +
-            "LEFT JOIN FeedEntity f ON f.id = i.feedId WHERE i.id IN (:ids)",
-    )
-    protected abstract fun rowsFor(ids: List<String>): Flow<List<ItemRow>>
+    @Query("SELECT id FROM ItemEntity WHERE read = 1 AND id IN (:ids)")
+    protected abstract suspend fun readChunk(ids: List<String>): List<String>
+
+    @Query("SELECT * FROM PendingMarkAllEntity")
+    protected abstract suspend fun pendingMarkAlls(): List<PendingMarkAllEntity>
+
+    @Query("SELECT id FROM FeedEntity WHERE folder = :folder")
+    protected abstract suspend fun feedsInFolder(folder: String): List<String>
 
     @Query("UPDATE ItemEntity SET read = :read, manualUnread = :manualUnread WHERE id = :id")
     abstract suspend fun setRead(id: String, read: Boolean, manualUnread: Boolean)
@@ -87,6 +94,9 @@ abstract class ItemDao {
     @Query("SELECT html FROM ItemEntity WHERE id = :id")
     abstract suspend fun htmlOf(id: String): String?
 
+    /** Which of [ids] are read locally. */
+    suspend fun readAmong(ids: List<String>): Set<String> = ids.chunked(CHUNK).flatMapTo(HashSet()) { readChunk(it) }
+
     suspend fun feedIdsOf(ids: List<String>): Map<String, String> =
         ids.chunked(CHUNK).flatMap { feedIdsChunk(it) }.associate { it.id to it.feedId }
 
@@ -98,29 +108,39 @@ abstract class ItemDao {
         candidates.filter { it !in pending }.chunked(CHUNK).forEach { markReadByIds(it) }
     }
 
+    /**
+     * Writes [items] from the server but keeps what the server has not been told yet: an item with
+     * a pending mark keeps its local state, and one that a pending mark-all covers stays read.
+     */
     @Transaction
     open suspend fun upsertKeepingLocal(items: List<ItemEntity>) {
         val ids = items.map { it.id }
         val existing = ids.chunked(CHUNK).flatMap { localState(it) }.associateBy { it.id }
         val pending = ids.chunked(CHUNK).flatMap { pendingAmong(it) }.toSet()
+        val covers = markAllCovers()
         val merged = items.map { incoming ->
-            val local = existing[incoming.id] ?: return@map incoming
-            if (incoming.id in pending) {
-                incoming.copy(read = local.read, manualUnread = local.manualUnread)
-            } else {
-                incoming.copy(manualUnread = local.manualUnread)
+            val local = existing[incoming.id]
+            when {
+                incoming.id in pending && local != null ->
+                    incoming.copy(read = local.read, manualUnread = local.manualUnread)
+                // later item marks are pending ones, handled above, so the mark-all decides the rest
+                covers.any { it.covers(incoming) } -> incoming.copy(read = true, manualUnread = false)
+                local != null -> incoming.copy(manualUnread = local.manualUnread)
+                else -> incoming
             }
         }
         merged.chunked(CHUNK).forEach { insertAll(it) }
     }
 
-    fun byIds(ids: List<String>): Flow<List<ItemRow>> {
-        if (ids.isEmpty()) return flowOf(emptyList())
-        val chunks = ids.chunked(CHUNK).map { rowsFor(it) }
-        return combine(chunks) { parts ->
-            val byId = parts.flatMap { it }.associateBy { it.id }
-            ids.mapNotNull { byId[it] }
+    // the same rule markReadWhere applied when the mark-all was made: in scope and published at
+    // or before the newest second it covered, which is the cutoff minus one second
+    private suspend fun markAllCovers(): List<MarkAllCover> = pendingMarkAlls().map { m ->
+        val feeds = when (val s = StreamId.parse(m.streamRaw)) {
+            StreamId.All -> null
+            is StreamId.Folder -> feedsInFolder(s.name).toSet()
+            is StreamId.Feed -> setOf(s.id)
         }
+        MarkAllCover(feeds, m.olderThanUsec / 1_000_000 - 1)
     }
 
     @Transaction

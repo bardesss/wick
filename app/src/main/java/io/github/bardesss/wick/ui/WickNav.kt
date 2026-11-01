@@ -19,18 +19,17 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.bardesss.wick.AppContainer
 import io.github.bardesss.wick.data.LinkTarget
+import io.github.bardesss.wick.sync.wipeAccount
 import io.github.bardesss.wick.ui.list.ListScreen
 import io.github.bardesss.wick.ui.list.ListViewModel
 import io.github.bardesss.wick.ui.login.LoginScreen
 import io.github.bardesss.wick.ui.login.LoginViewModel
 import io.github.bardesss.wick.ui.settings.SettingsScreen
 import io.github.bardesss.wick.ui.settings.signOut
-import io.github.bardesss.wick.ui.settings.wipeAccount
 import io.github.bardesss.wick.ui.theme.WickColors
 import androidx.compose.foundation.background
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.testTagsAsResourceId
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -38,8 +37,9 @@ import kotlinx.coroutines.launch
 fun WickNav(container: AppContainer) {
     val auth by container.creds.authFlow.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
-    // the list is gone while the account is wiped, so nothing can write to the database meanwhile
-    var signingOut by rememberSaveable { mutableStateOf(false) }
+    // the list is gone while the account is wiped, so nothing can write to the database meanwhile;
+    // held by the container, so it lasts through a rotation but not past the process the sign out runs in
+    val signingOut by container.signingOut.collectAsStateWithLifecycle()
     val session: SessionScope = viewModel { SessionScope(createSavedStateHandle()) }
     // view models for the signed in session are created from the activity's extras, so their
     // saved state lives with the activity while the session store decides how long they live
@@ -49,7 +49,7 @@ fun WickNav(container: AppContainer) {
     LaunchedEffect(auth == null) {
         if (auth == null) {
             settingsOpen = false
-            signingOut = false
+            container.signingOut.value = false
             session.end()
         }
     }
@@ -68,7 +68,7 @@ fun WickNav(container: AppContainer) {
                 extras = activityExtras,
             )
             // the list stays composed under the settings page, so it keeps its place
-            Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
+            Box(Modifier.fillMaxSize().benchTags()) {
                 Box(
                     Modifier.fillMaxSize().then(
                         if (settingsOpen) Modifier.semantics { hideFromAccessibility() } else Modifier,
@@ -79,7 +79,7 @@ fun WickNav(container: AppContainer) {
                 if (settingsOpen) {
                     BackHandler { settingsOpen = false }
                     SettingsRoute(container, auth?.server.orEmpty()) {
-                        signingOut = true
+                        container.signingOut.value = true
                         session.end()
                         container.appScope.launch {
                             try {
@@ -98,7 +98,7 @@ fun WickNav(container: AppContainer) {
                                     forgetAccount = { container.settings.setAccount(null) },
                                 )
                             } finally {
-                                signingOut = false
+                                container.signingOut.value = false
                             }
                         }
                     }

@@ -10,12 +10,11 @@ data class Item(
 )
 
 data class Feed(
-    val id: String,
+    override val id: String,
     val title: String,
-    val folder: String?,
-    val htmlUrl: String?,
+    override val folder: String?,
     val iconUrl: String?,
-)
+) : FeedInFolder
 
 data class UnreadCount(val streamId: String, val count: Int)
 

@@ -9,7 +9,7 @@ import org.junit.Test
 
 class PickerModelTest {
     private fun feed(id: String, title: String, folder: String?, icon: String? = null) =
-        FeedEntity(id, title, folder, null, icon)
+        FeedEntity(id, title, folder, icon)
 
     private val feeds = listOf(
         feed("feed/1", "zeta blog", null),
@@ -98,14 +98,14 @@ class PickerModelTest {
 
     @Test
     fun hiding_drops_feeds_and_folders_with_nothing_unread() {
-        val shown = hideEmpty(withCounts, StreamId.All)
+        val shown = withoutEmpty(withCounts, StreamId.All)
 
         assertEquals(listOf("all", "folder:Tech", "feed/2"), names(shown))
     }
 
     @Test
     fun hiding_keeps_the_selected_feed() {
-        val shown = hideEmpty(withCounts, StreamId.Feed("feed/5"))
+        val shown = withoutEmpty(withCounts, StreamId.Feed("feed/5"))
 
         assertEquals(listOf("all", "folder:Tech", "feed/2", "feed/5"), names(shown))
     }
@@ -114,17 +114,17 @@ class PickerModelTest {
     fun hiding_keeps_the_selected_folder_and_the_folder_of_a_selected_feed() {
         assertEquals(
             listOf("all", "folder:Food", "folder:Tech", "feed/2"),
-            names(hideEmpty(withCounts, StreamId.Folder("Food"))),
+            names(withoutEmpty(withCounts, StreamId.Folder("Food"))),
         )
         assertEquals(
             listOf("all", "folder:Food", "feed/6", "folder:Tech", "feed/2"),
-            names(hideEmpty(withCounts, StreamId.Feed("feed/6"))),
+            names(withoutEmpty(withCounts, StreamId.Feed("feed/6"))),
         )
     }
 
     @Test
     fun hiding_keeps_all_unread_when_nothing_is_unread() {
-        assertEquals(listOf("all"), names(hideEmpty(buildPicker(feeds, emptyMap()), StreamId.All)))
+        assertEquals(listOf("all"), names(withoutEmpty(buildPicker(feeds, emptyMap()), StreamId.All)))
     }
 
     @Test
@@ -164,19 +164,14 @@ class PickerModelTest {
     }
 
     @Test
-    fun mark_all_needs_two_taps_and_disarms_on_close() {
+    fun disarm_means_the_next_tap_arms_again() {
         val arm = MarkAllArm()
         assertFalse(arm.armed)
-        assertFalse(arm.confirm())
 
-        arm.arm()
-        assertTrue(arm.armed)
-        assertTrue(arm.confirm())
-        assertFalse(arm.armed)
-
-        arm.arm()
+        arm.tap(canMark = true)
         arm.disarm()
         assertFalse(arm.armed)
-        assertFalse(arm.confirm())
+        assertFalse(arm.tap(canMark = true))
+        assertTrue(arm.armed)
     }
 }

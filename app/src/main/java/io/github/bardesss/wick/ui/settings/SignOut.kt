@@ -1,45 +1,13 @@
 package io.github.bardesss.wick.ui.settings
 
 import android.util.Log
+import io.github.bardesss.wick.LOG_TAG
 import io.github.bardesss.wick.data.CredentialStore
-import io.github.bardesss.wick.data.SettingsStore
-import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.MarkQueue
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-
-private const val TAG = "Wick"
-
-/**
- * Empties the local copy of an account: every table and the cached images. Runs with no sync
- * or flush in progress, after the queue has applied what it was given. [beforeRelease] runs
- * last, still under that lock.
- */
-suspend fun wipeAccount(
-    queue: MarkQueue,
-    db: WickDb,
-    settings: SettingsStore,
-    beforeRelease: suspend () -> Unit = {},
-    clearImages: () -> Unit,
-) {
-    queue.quiesced {
-        queue.awaitApplied()
-        withContext(Dispatchers.IO) {
-            db.clearAllTables()
-            clearImages()
-        }
-        // the next account must not open on this one's folder or feed, or find its folders folded
-        settings.setLastView(null)
-        settings.clearCollapsed()
-        // sync must not find credentials once it can run again
-        beforeRelease()
-    }
-    // an operation that was still on its way must not land in the fresh database
-    queue.awaitApplied()
-}
 
 /**
  * Sends what is queued, if the server answers within [flushTimeoutMs], then wipes the account
@@ -60,7 +28,7 @@ suspend fun signOut(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        Log.w(TAG, "could not send the queue before signing out", e)
+        Log.w(LOG_TAG, "could not send the queue before signing out", e)
     }
     try {
         wipe()
@@ -68,25 +36,9 @@ suspend fun signOut(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        Log.e(TAG, "could not clear the local data while signing out", e)
+        Log.e(LOG_TAG, "could not clear the local data while signing out", e)
     } finally {
         // the credentials go even when the rest failed, and even when this was cancelled
         withContext(NonCancellable) { creds.clear() }
-    }
-}
-
-/**
- * Tells a new key for the account that is already here from a different account. Another
- * account's data and queued marks are wiped before its credentials are saved; the same account
- * keeps everything, so marks made before a rejected key are sent with the new one.
- */
-class AccountSwitch(
-    private val settings: SettingsStore,
-    private val wipe: suspend () -> Unit,
-) {
-    suspend fun enter(id: String) {
-        val previous = settings.account()
-        if (previous != null && previous != id) wipe()
-        settings.setAccount(id)
     }
 }

@@ -19,7 +19,9 @@ class FaviconAuth(private val auth: () -> Auth?) : Interceptor {
         val signedIn = auth() ?: return chain.proceed(request)
         val server = signedIn.server.toHttpUrlOrNull() ?: return chain.proceed(request)
         val key = signedIn.token.substringAfter('/', "")
-        if (key.isEmpty() || url.host != server.host || url.port != server.port) return chain.proceed(request)
+        if (key.isEmpty() || url.scheme != server.scheme || url.host != server.host || url.port != server.port) {
+            return chain.proceed(request)
+        }
         val withKey = url.newBuilder().setQueryParameter("apiKey", key).build()
         return chain.proceed(request.newBuilder().url(withKey).build())
     }

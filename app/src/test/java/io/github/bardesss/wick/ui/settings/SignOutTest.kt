@@ -10,9 +10,12 @@ import io.github.bardesss.wick.db.CountEntity
 import io.github.bardesss.wick.db.FeedEntity
 import io.github.bardesss.wick.db.ItemEntity
 import io.github.bardesss.wick.db.WickDb
+import io.github.bardesss.wick.sync.AccountSwitch
 import io.github.bardesss.wick.sync.FakeReaderApi
 import io.github.bardesss.wick.sync.inMemoryDb
 import io.github.bardesss.wick.sync.newQueue
+import io.github.bardesss.wick.sync.storedItems
+import io.github.bardesss.wick.sync.wipeAccount
 import io.github.bardesss.wick.ui.login.accountId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -58,7 +61,7 @@ class SignOutTest {
     }
 
     private suspend fun seed() {
-        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null, null)))
+        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null)))
         db.feedDao().replaceCounts(listOf(CountEntity("feed/1", 1)))
         db.itemDao().upsertKeepingLocal(listOf(ItemEntity("a", "feed/1", "T a", null, 100, null, read = false)))
         db.snapshotDao().replaceSnapshot(listOf("a"), writtenAtMs = 5)
@@ -81,7 +84,7 @@ class SignOutTest {
         assertTrue(db.feedDao().counts().first().isEmpty())
         assertTrue(db.snapshotDao().snapshotIds().first().isEmpty())
         assertNull(db.snapshotDao().writtenAt())
-        assertTrue(db.itemDao().byIds(listOf("a")).first().isEmpty())
+        assertTrue(db.storedItems(listOf("a")).isEmpty())
         assertTrue(db.queueDao().pending().isEmpty())
         assertTrue(imagesCleared)
     }
@@ -161,7 +164,7 @@ class SignOutTest {
 
         assertTrue(db.queueDao().pending().isEmpty())
         assertTrue(db.feedDao().feedsNow().isEmpty())
-        assertTrue(db.itemDao().byIds(listOf("a")).first().isEmpty())
+        assertTrue(db.storedItems(listOf("a")).isEmpty())
         assertTrue(imagesCleared)
         assertEquals("https://feeds.example.com\nsomeone", settings.account())
     }

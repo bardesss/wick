@@ -1,6 +1,9 @@
 package io.github.bardesss.wick.api
 
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -11,6 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 
 class GReaderApiTest {
     private lateinit var server: MockWebServer
@@ -107,8 +111,8 @@ class GReaderApiTest {
         val feeds = runBlocking { api.feeds() }
         assertEquals(
             listOf(
-                Feed("feed/3", "Blog & Co", "News", "https://b.example", "https://b.example/i.png"),
-                Feed("feed/4", "Loose", null, null, null),
+                Feed("feed/3", "Blog & Co", "News", "https://b.example/i.png"),
+                Feed("feed/4", "Loose", null, null),
             ),
             feeds,
         )
@@ -262,5 +266,62 @@ class GReaderApiTest {
         assertTrue(body, body.contains("s=user%2F-%2Flabel%2FNews"))
         assertTrue(body, body.contains("ts=1730000000000000"))
         assertTrue(body, body.contains("T=tok"))
+    }
+
+    @Test
+    fun login_200_without_auth_line_is_NoGReaderApi() {
+        server.enqueue(MockResponse().setBody("<html>catch all</html>"))
+        expectError(ApiError.NoGReaderApi) { api.login(serverUrl(), "u", "k") }
+        server.enqueue(MockResponse().setBody("SID=x\nAuth=\n"))
+        expectError(ApiError.BadCredentials) { api.login(serverUrl(), "u", "k") }
+    }
+
+    @Test
+    fun forbidden_on_authenticated_calls_is_BadCredentials() {
+        server.enqueue(MockResponse().setResponseCode(403))
+        expectError(ApiError.BadCredentials) { api.feeds() }
+    }
+
+    @Test
+    fun edit_token_is_not_reused_for_another_sign_in() {
+        var auth = Auth(serverUrl(), "a/1")
+        val switching = GReaderApi(OkHttpClient()) { auth }
+        server.enqueue(MockResponse().setBody("tokA"))
+        server.enqueue(MockResponse().setBody("OK"))
+        runBlocking { switching.setRead(listOf("x"), true) }
+        auth = Auth(serverUrl(), "b/2")
+        server.enqueue(MockResponse().setBody("tokB"))
+        server.enqueue(MockResponse().setBody("OK"))
+        runBlocking { switching.setRead(listOf("y"), true) }
+        repeat(2) { server.takeRequest() }
+        val tokenB = server.takeRequest()
+        assertEquals("$base/reader/api/0/token", tokenB.path)
+        assertEquals("GoogleLogin auth=b/2", tokenB.getHeader("Authorization"))
+        assertTrue(server.takeRequest().body.readUtf8().contains("T=tokB"))
+        // the same sign in keeps its token
+        server.enqueue(MockResponse().setBody("OK"))
+        runBlocking { switching.setRead(listOf("z"), true) }
+        assertEquals("$base/reader/api/0/edit-tag", server.takeRequest().path)
+    }
+
+    @Test
+    fun cancelling_the_caller_ends_the_call_at_once() {
+        server.enqueue(MockResponse().setBody("{}").setHeadersDelay(8, TimeUnit.SECONDS))
+        val start = System.nanoTime()
+        try {
+            runBlocking { withTimeout(300) { api.feeds() } }
+            fail("expected a timeout")
+        } catch (e: TimeoutCancellationException) {
+            // expected
+        }
+        val ms = (System.nanoTime() - start) / 1_000_000
+        assertTrue("took $ms ms", ms < 3_000)
+    }
+
+    @Test
+    fun refused_cleartext_is_told_apart_from_unreachable() {
+        val tlsOnly = OkHttpClient.Builder().connectionSpecs(listOf(ConnectionSpec.MODERN_TLS)).build()
+        val strict = GReaderApi(tlsOnly) { Auth(serverUrl(), "u/k") }
+        expectError(ApiError.Cleartext) { strict.feeds() }
     }
 }

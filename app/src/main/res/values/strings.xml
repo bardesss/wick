@@ -19,6 +19,26 @@
     <string name="list_marked_read">Marked read</string>
     <string name="list_marked_unread">Marked unread</string>
     <string name="sheet_age">%1$s ago</string>
+    <string name="age_now">now</string>
+    <string name="age_minutes">%1$dm</string>
+    <string name="age_hours">%1$dh</string>
+    <string name="age_days">%1$dd</string>
+    <string name="age_now_spoken">just now</string>
+    <plurals name="age_minutes_spoken">
+        <item quantity="one">%1$d minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
+    </plurals>
+    <plurals name="age_hours_spoken">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="age_days_spoken">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
+    <string name="row_state_read">Read</string>
+    <string name="row_state_unread">Unread</string>
+    <string name="wordmark">Wick</string>
     <string name="sheet_no_text">This feed doesn\'t include any text</string>
     <string name="sheet_open">Open</string>
     <string name="list_choose_view">Choose view</string>
@@ -31,19 +51,23 @@
     <string name="picker_mark_all_armed">Tap again to mark %1$d read</string>
     <string name="list_mark_all_armed">Mark %1$d read</string>
     <string name="settings_sort">Sort order</string>
-    <string name="settings_newest_first">Newest first</string>
-    <string name="settings_oldest_first">Oldest first</string>
-    <string name="settings_empty_feeds">Feeds with no unread</string>
-    <string name="settings_show">Show</string>
-    <string name="settings_hide">Hide</string>
+    <string name="settings_newest">Newest</string>
+    <string name="settings_oldest">Oldest</string>
+    <string name="settings_hide_empty">Hide feeds with no unread</string>
     <string name="settings_images">Images in summary</string>
     <string name="settings_haptics">Haptics</string>
-    <string name="settings_on">On</string>
-    <string name="settings_off">Off</string>
     <string name="settings_links">Open links in</string>
-    <string name="settings_links_in_app">In-app browser</string>
+    <string name="settings_links_in_app">In app</string>
     <string name="settings_links_default">Default app</string>
     <string name="settings_account">Account</string>
     <string name="settings_source">Source code</string>
     <string name="settings_sign_out">Sign out</string>
+    <string name="error_unreachable">Can\'t reach the server. Is your VPN on?</string>
+    <string name="error_needs_https">Wick needs an https address</string>
+    <string name="error_bad_credentials">Username or API key is wrong</string>
+    <string name="error_no_api">No Google Reader API at this address</string>
+    <string name="error_malformed">The server\'s answer couldn\'t be read</string>
+    <string name="error_http">The server answered with error %1$d</string>
+    <string name="error_storage">Couldn\'t store the sign in on this device</string>
+    <string name="error_bad_address">That address doesn\'t look right</string>
 </resources>

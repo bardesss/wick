@@ -60,6 +60,13 @@ class FaviconTest {
     }
 
     @Test
+    fun icon_that_is_not_http_is_null() {
+        assertNull(resolveIcon("https://feeds.example.com", "file:///data/data/x/databases/wick.db"))
+        assertNull(resolveIcon("https://feeds.example.com", "content://x/y"))
+        assertNull(resolveIcon("https://feeds.example.com", "android.resource://x/1"))
+    }
+
+    @Test
     fun blank_icon_is_null() {
         assertNull(resolveIcon("https://feeds.example.com", null))
         assertNull(resolveIcon("https://feeds.example.com", ""))

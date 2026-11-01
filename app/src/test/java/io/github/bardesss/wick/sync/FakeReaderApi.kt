@@ -32,7 +32,7 @@ class FakeReaderApi : ReaderApi {
     }
 
     fun addFeed(id: String, folder: String? = null) {
-        feedList += Feed(id, "Feed $id", folder, null, null)
+        feedList += Feed(id, "Feed $id", folder, null)
     }
 
     fun addItem(id: String, feedId: String, publishedSec: Long, read: Boolean = false, html: String? = null, url: String? = null) {

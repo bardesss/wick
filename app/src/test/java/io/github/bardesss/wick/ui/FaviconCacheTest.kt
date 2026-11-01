@@ -9,7 +9,7 @@ import coil3.request.ImageResult
 import coil3.request.SuccessResult
 import io.github.bardesss.wick.api.Auth
 import io.github.bardesss.wick.api.FaviconAuth
-import io.github.bardesss.wick.faviconLoader
+import io.github.bardesss.wick.buildImageLoader
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -51,7 +51,7 @@ class FaviconCacheTest {
         val auth = Auth(server.url("/").toString().trimEnd('/'), "alice/k3y")
         val context = ApplicationProvider.getApplicationContext<Context>()
         val dir = File(context.cacheDir, "favicon-test").apply { deleteRecursively() }
-        val loader = faviconLoader(context, OkHttpClient.Builder().addInterceptor(FaviconAuth { auth }).build(), dir)
+        val loader = buildImageLoader(context, OkHttpClient.Builder().addInterceptor(FaviconAuth { auth }).build(), dir)
         val url = server.url("/rest/feed/favicon/3").toString()
 
         // Coil hops to the main thread, which only runs while this test thread idles its looper

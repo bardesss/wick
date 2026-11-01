@@ -12,6 +12,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -32,7 +35,9 @@ fun Wordmark(modifier: Modifier = Modifier, size: TextUnit = 56.sp) {
     val sizePx = with(LocalDensity.current) { size.toPx() }
     val flameSide = with(LocalDensity.current) { (sizePx * FLAME_EM).toDp() }
 
-    Box(modifier) {
+    val name = stringResource(R.string.wordmark)
+    // the dotless i would be read out as an odd word, so the whole mark is one name
+    Box(modifier.clearAndSetSemantics { contentDescription = name }) {
         Text(
             text = "wıck",
             style = TextStyle(

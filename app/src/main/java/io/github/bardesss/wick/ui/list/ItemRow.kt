@@ -15,13 +15,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import io.github.bardesss.wick.format.formatAge
+import io.github.bardesss.wick.R
+import io.github.bardesss.wick.format.ageOf
 import io.github.bardesss.wick.ui.Favicon
+import io.github.bardesss.wick.ui.short
+import io.github.bardesss.wick.ui.spoken
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
 
@@ -41,6 +48,10 @@ fun ItemRow(
 ) {
     val titleColor by animateColorAsState(if (read) WickColors.Faded else WickColors.Paper, FadeSpec, label = "title")
     val metaColor by animateColorAsState(if (read) WickColors.MetaDim else WickColors.Meta, FadeSpec, label = "meta")
+    // the colour alone tells read from unread, so say it too
+    val state = stringResource(if (read) R.string.row_state_read else R.string.row_state_unread)
+    val age = ageOf(nowSec, row.publishedSec)
+    val spokenAge = age.spoken()
     Row(
         modifier
             .fillMaxWidth()
@@ -58,6 +69,7 @@ fun ItemRow(
                     Modifier
                 },
             )
+            .semantics { stateDescription = state }
             .clickable(onClick = onClick)
             .padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 15.dp),
     ) {
@@ -81,11 +93,11 @@ fun ItemRow(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = formatAge(nowSec, row.publishedSec),
+                    text = age.short(),
                     style = WickText.Meta,
                     color = metaColor,
                     maxLines = 1,
-                    modifier = Modifier.padding(start = 12.dp),
+                    modifier = Modifier.padding(start = 12.dp).semantics { contentDescription = spokenAge },
                 )
             }
         }

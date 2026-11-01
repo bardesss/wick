@@ -70,6 +70,8 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
@@ -93,9 +95,11 @@ import io.github.bardesss.wick.ui.picker.PickerDrawer
 import io.github.bardesss.wick.ui.picker.show
 import io.github.bardesss.wick.ui.rememberHaptics
 import io.github.bardesss.wick.ui.rememberReducedMotion
+import io.github.bardesss.wick.ui.resolve
 import io.github.bardesss.wick.ui.sheet.SheetBody
 import io.github.bardesss.wick.ui.sheet.SummarySheet
 import io.github.bardesss.wick.ui.theme.InstrumentSans
+import io.github.bardesss.wick.ui.theme.TapTarget
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
 import kotlinx.coroutines.Job
@@ -105,11 +109,9 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val CountStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 14.sp, fontFeatureSettings = "tnum")
-private val NoteStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
 private val ToastStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.5.sp)
 private val ToastShape = RoundedCornerShape(12.dp)
 private val FlameSize = 28.dp
-private val TapTarget = 48.dp
 private val MarkAllHeight = 32.dp
 private val MarkAllShape = RoundedCornerShape(18.dp)
 private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp)
@@ -231,7 +233,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     ListContent(
         viewName = name ?: stringResource(R.string.list_all_unread),
         count = count,
-        message = message,
+        message = message?.resolve(),
         rows = rows,
         read = read,
         nowSec = nowSec,
@@ -322,7 +324,7 @@ fun ListContent(
     onSwipeTick: () -> Unit = {},
     reducedMotion: Boolean = false,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
-    /** Fixed sideways offsets in px by row id, for previews. */
+    /** Fixed sideways offsets in px by row id, for previews; only the snapshot tests set it. */
     swipePreview: Map<String, Float> = emptyMap(),
 ) {
     val frameSink by rememberUpdatedState(onFrame)
@@ -345,7 +347,7 @@ fun ListContent(
             if (message != null) {
                 Text(
                     message,
-                    style = NoteStyle,
+                    style = WickText.Note,
                     color = WickColors.Meta,
                     modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 8.dp),
                 )
@@ -478,7 +480,14 @@ fun ListContent(
 /** Says that the header counts items the list does not show; a tap refreshes. Unseen and inert while that runs. */
 @Composable
 private fun NewItemsPill(count: Int, enabled: Boolean, onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0f), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0f)
+            // unseen is not enough, a screen reader would still find it
+            .then(if (enabled) Modifier else Modifier.semantics { hideFromAccessibility() }),
+        contentAlignment = Alignment.Center,
+    ) {
         // the pill is smaller than a finger, so the tap target around it is 48dp
         Box(
             Modifier
@@ -552,7 +561,7 @@ private fun Header(
                 color = WickColors.Paper,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.alignByBaseline().weight(1f, fill = false),
+                modifier = Modifier.alignByBaseline().weight(1f, fill = false).semantics { heading() },
             )
             Spacer(Modifier.width(10.dp))
             Text(count.toString(), style = CountStyle, color = countColor, modifier = Modifier.alignByBaseline())

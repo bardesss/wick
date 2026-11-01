@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- API 35 and later draw edge to edge and ignore the bar colours, so they are not set here -->
+    <style name="Theme.Wick" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/night</item>
+    </style>
+</resources>

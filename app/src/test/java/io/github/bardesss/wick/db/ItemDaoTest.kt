@@ -3,6 +3,7 @@ package io.github.bardesss.wick.db
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import io.github.bardesss.wick.sync.storedItems
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -55,7 +56,7 @@ class ItemDaoTest {
         manualUnread = manualUnread,
     )
 
-    private suspend fun row(id: String) = items.byIds(listOf(id)).first().single()
+    private fun row(id: String) = db.storedItems(listOf(id)).single()
 
     @Test
     fun upsert_preserves_pending_local_state() = runTest {
@@ -79,6 +80,50 @@ class ItemDaoTest {
         assertFalse(b.read)
         assertTrue(b.manualUnread)
         assertEquals("New B", b.title)
+    }
+
+    @Test
+    fun upsert_keeps_items_covered_by_a_pending_mark_all_read() = runTest {
+        feeds.replaceAll(
+            listOf(
+                FeedEntity("f1", "One", "News", null),
+                FeedEntity("f2", "Two", null, null),
+            ),
+        )
+        items.upsertKeepingLocal(listOf(item("a", publishedSec = 100), item("late", publishedSec = 300), item("other", feedId = "f2")))
+        // mark all of the folder up to 200, as MarkQueue does it, and the server never hears of it
+        items.markReadWhere(listOf("f1"), 200)
+        queue.enqueueAll(PendingMarkAllEntity(streamRaw = "user/-/label/News", olderThanUsec = 201 * 1_000_000L))
+
+        items.upsertKeepingLocal(
+            listOf(
+                item("a", publishedSec = 100),
+                item("new", publishedSec = 150),
+                item("edge", publishedSec = 200),
+                item("late", publishedSec = 300),
+                item("other", feedId = "f2", publishedSec = 100),
+            ),
+        )
+
+        assertTrue(row("a").read)
+        assertTrue(row("new").read)
+        assertTrue(row("edge").read)
+        assertFalse(row("late").read)
+        assertFalse(row("other").read)
+    }
+
+    @Test
+    fun a_pending_item_mark_after_a_mark_all_wins_on_upsert() = runTest {
+        items.upsertKeepingLocal(listOf(item("a", publishedSec = 100)))
+        items.markReadWhere(null, 200)
+        queue.enqueueAll(PendingMarkAllEntity(streamRaw = "user/-/state/com.google/reading-list", olderThanUsec = 201 * 1_000_000L))
+        items.setRead("a", read = false, manualUnread = true)
+        queue.enqueue(PendingMarkEntity("a", read = false, queuedAt = 1))
+
+        items.upsertKeepingLocal(listOf(item("a", publishedSec = 100)))
+
+        assertFalse(row("a").read)
+        assertTrue(row("a").manualUnread)
     }
 
     @Test
@@ -126,9 +171,6 @@ class ItemDaoTest {
         assertFalse(pending[0].read)
         assertEquals(2L, pending[0].queuedAt)
 
-        queue.delete(listOf("a"))
-        assertEquals(listOf("b"), queue.pending().map { it.itemId })
-
         queue.enqueueAll(PendingMarkAllEntity(streamRaw = "user/-/state/com.google/reading-list", olderThanUsec = 5))
         val all = queue.pendingAll()
         assertEquals(1, all.size)
@@ -150,34 +192,15 @@ class ItemDaoTest {
 
         items.pruneReadNotIn(setOf("keepRead"))
 
-        val left = items.byIds(listOf("keepRead", "dropRead", "pendingRead", "unread")).first().map { it.id }
+        val left = db.storedItems(listOf("keepRead", "dropRead", "pendingRead", "unread")).map { it.id }
         assertEquals(listOf("keepRead", "pendingRead", "unread"), left)
     }
 
     @Test
-    fun byIds_keeps_snapshot_order_and_joins_feed() = runTest {
-        feeds.replaceAll(listOf(FeedEntity("f1", "Feed One", null, "https://one.example", "https://one.example/i.png")))
-        items.upsertKeepingLocal(
-            listOf(
-                item("a", feedId = "f1"),
-                item("b", feedId = "f2"),
-                item("c", feedId = "f1"),
-            ),
-        )
-
-        val rows = items.byIds(listOf("c", "missing", "a", "b")).first()
-
-        assertEquals(listOf("c", "a", "b"), rows.map { it.id })
-        assertEquals("Feed One", rows[0].feedTitle)
-        assertEquals("https://one.example/i.png", rows[1].feedIconUrl)
-        assertEquals(null, rows[2].feedTitle)
-    }
-
-    @Test
-    fun byIds_handles_more_than_sqlite_variable_limit() = runTest {
+    fun readAmong_handles_more_than_sqlite_variable_limit() = runTest {
         val ids = (1..1500).map { "id$it" }
-        items.upsertKeepingLocal(ids.map { item(it) })
-        assertEquals(ids, items.byIds(ids).first().map { it.id })
+        items.upsertKeepingLocal(ids.mapIndexed { n, id -> item(id, read = n % 2 == 0) })
+        assertEquals(ids.filterIndexed { n, _ -> n % 2 == 0 }.toSet(), items.readAmong(ids))
     }
 
     @Test

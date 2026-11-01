@@ -32,6 +32,19 @@ sealed interface StreamId {
     }
 }
 
+/** A feed and the folder it sits in, as the server lists it and as it is stored. */
+interface FeedInFolder {
+    val id: String
+    val folder: String?
+}
+
+/** The ids of the [feeds] this view covers, or null for the whole account. */
+fun StreamId.feedIds(feeds: List<FeedInFolder>): List<String>? = when (this) {
+    StreamId.All -> null
+    is StreamId.Folder -> feeds.filter { it.folder == name }.map { it.id }
+    is StreamId.Feed -> listOf(id)
+}
+
 internal fun percentEncode(s: String): String {
     val sb = StringBuilder()
     for (b in s.toByteArray(Charsets.UTF_8)) {

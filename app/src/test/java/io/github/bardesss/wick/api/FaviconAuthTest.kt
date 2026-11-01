@@ -52,6 +52,14 @@ class FaviconAuthTest {
     }
 
     @Test
+    fun plain_http_on_the_same_host_and_port_gets_no_key() {
+        val u = server.url("/")
+        auth = Auth("https://" + u.host + ":" + u.port, "alice/k3y")
+        server.enqueue(MockResponse())
+        assertNull(fetch(server, "/rest/feed/favicon/3").queryParameter("apiKey"))
+    }
+
+    @Test
     fun other_server_gets_no_key() {
         other.enqueue(MockResponse())
         assertNull(fetch(other, "/rest/feed/favicon/3").queryParameter("apiKey"))

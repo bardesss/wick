@@ -17,6 +17,9 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # workflow changes do not touch the APK, so they ship no release
+    commit-message:
+      prefix: "[skip release]"
     groups:
       actions:
         patterns: ['*']

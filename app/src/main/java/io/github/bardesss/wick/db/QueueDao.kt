@@ -16,9 +16,6 @@ abstract class QueueDao {
     @Query("SELECT * FROM PendingMarkEntity ORDER BY queuedAt, itemId")
     abstract suspend fun pending(): List<PendingMarkEntity>
 
-    @Query("DELETE FROM PendingMarkEntity WHERE itemId IN (:ids)")
-    protected abstract suspend fun deleteChunk(ids: List<String>)
-
     @Insert
     abstract suspend fun enqueueAll(m: PendingMarkAllEntity)
 
@@ -98,10 +95,5 @@ abstract class QueueDao {
             is StreamId.Folder -> zeroFolderFeedCounts(s.name)
             is StreamId.Feed -> zeroFeedCount(s.id)
         }
-    }
-
-    @Transaction
-    open suspend fun delete(ids: List<String>) {
-        ids.chunked(500).forEach { deleteChunk(it) }
     }
 }

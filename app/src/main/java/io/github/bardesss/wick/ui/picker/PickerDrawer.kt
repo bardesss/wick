@@ -54,13 +54,16 @@ import androidx.compose.ui.unit.sp
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.ui.Favicon
+import io.github.bardesss.wick.ui.Wordmark
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.Newsreader
+import io.github.bardesss.wick.ui.theme.TapTarget
 import io.github.bardesss.wick.ui.theme.WickColors
+import io.github.bardesss.wick.ui.theme.WickText
 
 private const val DRAWER_WIDTH = 0.84f
-private val Scrim = Color(0x99040608)
-private val FeedText = Color(0xFFB7BEC6)
+// a little smaller than "All unread" under it, so it does not compete
+private val WordmarkSize = 26.sp
 private val IdleBorder = Color(0xFF3A3226)
 private val ButtonShape = RoundedCornerShape(14.dp)
 private val ChevronGutter = 32.dp
@@ -69,7 +72,6 @@ private val AllStyle = TextStyle(fontFamily = Newsreader, fontWeight = FontWeigh
 private val FolderStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 15.sp)
 private val FeedStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 15.sp)
 private val CountStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp, fontFeatureSettings = "tnum")
-private val ButtonStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 15.sp)
 private val LinkStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
 
 /** Opens or closes the drawer, without the slide when [animate] is off. */
@@ -114,7 +116,7 @@ fun PickerDrawer(
         },
         drawerState = state,
         gesturesEnabled = true,
-        scrimColor = Scrim,
+        scrimColor = WickColors.Scrim,
         content = content,
     )
 }
@@ -132,7 +134,11 @@ private fun DrawerBody(
     onToggleFolder: (String) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(top = 28.dp, bottom = 8.dp)) {
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(top = 24.dp, bottom = 8.dp)) {
+            // the mark scrolls away with a long list, so it never takes room from the feeds
+            item(key = "wordmark", contentType = "wordmark") {
+                Wordmark(Modifier.padding(start = 22.dp, bottom = 14.dp), size = WordmarkSize)
+            }
             items(entries, key = { it.key() }, contentType = { it::class }) { entry ->
                 // the feeds of a folder slide in and out, unless motion is reduced
                 val move = if (animate) Modifier.animateItem() else Modifier
@@ -146,7 +152,7 @@ private fun DrawerBody(
                 style = LinkStyle,
                 color = WickColors.Meta,
                 modifier = Modifier
-                    .heightIn(min = 48.dp)
+                    .heightIn(min = TapTarget)
                     .clickable(onClick = onSettings)
                     .padding(top = 14.dp)
                     .fillMaxWidth(),
@@ -195,7 +201,7 @@ private fun EntryRow(
             val (label, style, color) = when (entry) {
                 is PickerEntry.All -> Triple(stringResource(R.string.list_all_unread), AllStyle, WickColors.Paper)
                 is PickerEntry.Folder -> Triple(entry.name, FolderStyle, WickColors.Paper)
-                is PickerEntry.Feed -> Triple(entry.title, FeedStyle, FeedText)
+                is PickerEntry.Feed -> Triple(entry.title, FeedStyle, WickColors.Muted)
             }
             if (entry is PickerEntry.Feed) {
                 Favicon(entry.iconUrl, entry.title, faded = false, tile = WickColors.Night)
@@ -224,7 +230,7 @@ private fun FolderChevron(folder: PickerEntry.Folder, animate: Boolean, onClick:
     Box(Modifier.width(ChevronGutter).zIndex(1f)) {
         Box(
             Modifier
-                .requiredSize(48.dp)
+                .requiredSize(TapTarget)
                 .semantics { role = Role.Button; contentDescription = label }
                 .clickable(onClick = onClick)
                 .testTag("folder_chevron"),
@@ -261,7 +267,7 @@ private fun MarkAllButton(count: Int, enabled: Boolean, armed: Boolean, animate:
     ) {
         Text(
             if (armed) stringResource(R.string.picker_mark_all_armed, count) else stringResource(R.string.picker_mark_all),
-            style = ButtonStyle,
+            style = WickText.Button,
             color = if (animate) text else textTarget,
         )
     }

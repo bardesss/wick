@@ -4,7 +4,10 @@ import androidx.activity.ComponentActivity
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.Text
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -65,5 +68,13 @@ class PickerDrawerFoldTest {
         rule.onNodeWithContentDescription("Expand Tech").performClick()
 
         assertEquals(listOf("Tech"), toggled)
+    }
+
+    @Test
+    fun the_wordmark_is_one_name_and_not_a_control() {
+        show(listOf(PickerEntry.All(3)))
+
+        rule.onNodeWithContentDescription("Wick").assertHasNoClickAction()
+        rule.onAllNodesWithText("wıck").assertCountEquals(0)
     }
 }
