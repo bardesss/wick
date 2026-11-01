@@ -1,42 +1,83 @@
 name: Release
 
+# Every push to main ships a release. The version is the latest v* tag plus one patch.
+# Put [minor] or [major] in the PR title for a bigger bump, or [skip release] to ship nothing.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
     inputs:
       versionName:
         description: Version to build (dry run, nothing is published)
         default: 0.0.1
 
+# one release at a time, so each run sees the tag of the one before
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
   # SHA-256 of the release signing certificate. This is public, not a secret.
   EXPECTED_CERT_SHA256: 7c41896869e8c6c2bbb0a86f9fbd514797e58de74d4d6eb0438506bf3656a512
 
 jobs:
-  build:
+  version:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
     env:
       EVENT: ${{ github.event_name }}
-      REF_NAME: ${{ github.ref_name }}
+      MESSAGE: ${{ github.event.head_commit.message }}
       INPUT_VERSION: ${{ inputs.versionName }}
     steps:
       - name: Work out the version
+        id: next
         run: |
-          if [ "$EVENT" = "push" ]; then
-            tag="$REF_NAME"
-          else
+          if [ "$EVENT" = "workflow_dispatch" ]; then
             tag="v$INPUT_VERSION"
+          else
+            title=$(printf '%s\n' "$MESSAGE" | head -n 1)
+            case "$title" in
+              *"[skip release]"*)
+                echo "Skipped by [skip release]"
+                exit 0
+                ;;
+            esac
+            latest=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' \
+              | sed 's|.*refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+            if [ -z "$latest" ]; then
+              tag="v0.1.0"
+            else
+              IFS=. read -r major minor patch <<< "${latest#v}"
+              case "$title" in
+                *"[major]"*) major=$((major + 1)); minor=0; patch=0 ;;
+                *"[minor]"*) minor=$((minor + 1)); patch=0 ;;
+                *) patch=$((patch + 1)) ;;
+              esac
+              # versionCode allows at most 99 for minor and patch
+              if [ "$patch" -gt 99 ]; then minor=$((minor + 1)); patch=0; fi
+              if [ "$minor" -gt 99 ]; then major=$((major + 1)); minor=0; fi
+              tag="v$major.$minor.$patch"
+            fi
           fi
           if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "Bad version, expected vX.Y.Z"
             exit 1
           fi
-          echo "TAG=$tag" >> "$GITHUB_ENV"
-          echo "VERSION=${tag#v}" >> "$GITHUB_ENV"
+          echo "Version $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+  build:
+    needs: version
+    if: needs.version.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
       # actions/checkout v4.4.0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       # actions/setup-java v4.9.1
@@ -59,7 +100,7 @@ jobs:
           WICK_KEYSTORE_PASSWORD: ${{ secrets.WICK_KEYSTORE_PASSWORD }}
           WICK_KEY_ALIAS: ${{ secrets.WICK_KEY_ALIAS }}
           WICK_KEY_PASSWORD: ${{ secrets.WICK_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease -PversionName="$VERSION"
+        run: ./gradlew :app:assembleRelease -PversionName="${TAG#v}"
 
       - name: Check the signature
         run: |
@@ -90,19 +131,25 @@ jobs:
 
   publish:
     if: github.event_name == 'push'
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
     steps:
       # actions/download-artifact v4.3.0
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: wick-${{ github.ref_name }}
+          name: wick-${{ env.TAG }}
           path: dist
 
+      # creates the tag on the commit that was built
       # softprops/action-gh-release v3.0.3
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64
         with:
-          body: Wick ${{ github.ref_name }}. Install or update with Obtainium.
-          files: dist/wick-${{ github.ref_name }}.apk
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          body: Install or update with Obtainium.
+          generate_release_notes: true
+          files: dist/wick-${{ env.TAG }}.apk
