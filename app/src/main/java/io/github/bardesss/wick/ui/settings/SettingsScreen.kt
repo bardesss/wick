@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -54,6 +55,9 @@ private val LabelStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = Fon
 private val RowStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 16.sp)
 private val SegmentStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 13.5.sp)
 private val SegmentPadding = PaddingValues(horizontal = 12.dp)
+
+// every setting row has the same height, whatever control it holds
+private val RowHeight = 60.dp
 private const val PROJECT_URL = "https://github.com/bardesss/wick"
 
 /** Null for a setting that has not been read yet; its control shows no choice and waits until it is. */
@@ -89,7 +93,11 @@ fun SettingsScreen(
                 stringResource(R.string.settings),
                 style = WickText.Header,
                 color = WickColors.Paper,
-                modifier = Modifier.padding(top = 20.dp, bottom = 12.dp),
+                // same box as the list header, so the title lands where the list's does
+                modifier = Modifier
+                    .padding(top = 20.dp, bottom = 14.dp)
+                    .heightIn(min = TapTarget)
+                    .wrapContentHeight(Alignment.CenterVertically),
             )
 
             TwoChoiceRow(
@@ -165,9 +173,8 @@ private fun SwitchRow(label: String, checked: Boolean?, onChange: (Boolean) -> U
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = TapTarget)
-            .toggleable(value = checked == true, enabled = checked != null, role = Role.Switch, onValueChange = onChange)
-            .padding(vertical = 8.dp),
+            .height(RowHeight)
+            .toggleable(value = checked == true, enabled = checked != null, role = Role.Switch, onValueChange = onChange),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = RowStyle, color = WickColors.Paper, modifier = Modifier.weight(1f))
@@ -196,7 +203,7 @@ private fun SwitchRow(label: String, checked: Boolean?, onChange: (Boolean) -> U
 @Composable
 private fun TwoChoiceRow(label: String, first: String, second: String, value: Boolean?, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = TapTarget).padding(vertical = 4.dp),
+        Modifier.fillMaxWidth().height(RowHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = RowStyle, color = WickColors.Paper, modifier = Modifier.weight(1f))
