@@ -12,14 +12,14 @@ Headlines from your own feed server, read top to bottom.
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-E3A857?style=flat-square&labelColor=12161B&logo=android&logoColor=white)](#requirements)
 [![License: GPL-3.0](https://img.shields.io/github/license/bardesss/wick?style=flat-square&color=E3A857&labelColor=12161B)](LICENSE)
 
-<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/bardesss/wick"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="54" alt="Get it on Obtainium"></a>
-<a href="https://github.com/bardesss/wick/releases/latest"><img src="https://img.shields.io/badge/Download-APK-E3A857?style=for-the-badge&labelColor=12161B&logo=android&logoColor=white" height="54" alt="Download the APK"></a>
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/bardesss/wick"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="48" alt="Get it on Obtainium"></a>
+<a href="https://github.com/bardesss/wick/releases/latest"><img src="https://img.shields.io/badge/Download-APK-E3A857?style=for-the-badge&labelColor=12161B&logo=android&logoColor=white" height="48" alt="Download the APK"></a>
 
 <br><br>
 
-<img src="art/list.png" width="250" alt="The article list">&nbsp;&nbsp;
-<img src="art/sheet.png" width="250" alt="Reading the feed text in the sheet">&nbsp;&nbsp;
-<img src="art/drawer.png" width="250" alt="Folders and feeds with unread counts">
+<img src="art/list.png" width="30%" alt="The article list">&nbsp;&nbsp;
+<img src="art/sheet.png" width="30%" alt="Reading the feed text in the sheet">&nbsp;&nbsp;
+<img src="art/drawer.png" width="30%" alt="Folders and feeds with unread counts">
 
 </div>
 
