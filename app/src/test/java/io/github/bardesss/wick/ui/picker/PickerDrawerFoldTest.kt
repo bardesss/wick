@@ -36,7 +36,6 @@ class PickerDrawerFoldTest {
                     entries = entries,
                     selected = StreamId.All,
                     markCount = 3,
-                    markEnabled = true,
                     armed = false,
                     animate = false,
                     onSelect = { selected += it },

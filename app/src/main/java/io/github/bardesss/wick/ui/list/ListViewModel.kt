@@ -140,11 +140,6 @@ class ListViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** Whether "Mark all read" has rows to take its cutoff from. */
-    val canMarkAll: StateFlow<Boolean> = rows.map { !it.isNullOrEmpty() }
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
     /** The drawer list with the icons resolved against the server. */
     val picker: StateFlow<List<PickerEntry>> = combine(
         feedDao.all(),
@@ -225,16 +220,21 @@ class ListViewModel(
 
     /**
      * Marks the whole view read on the server, up to the newest row loaded, then refreshes.
-     * Items that arrived after that stay unread.
+     * Items that arrived after that stay unread. With no rows loaded (the header can count items
+     * the list does not show yet) the newest unread item stored for the view stands in, or now.
      */
     fun markAllRead() {
         val v = _view.value
-        // with nothing loaded there is no cutoff to mark up to
         val loaded = rows.value
-        if (loaded.isNullOrEmpty()) return
+        if (loaded.isNullOrEmpty() && count.value <= 0) return
         viewModelScope.launch {
-            val newest = loaded.maxOf { it.publishedSec }
-            queue.markAll(v, feedIdsOf(v, feedDao.feedsNow()), newest)
+            val feedIds = feedIdsOf(v, feedDao.feedsNow())
+            val newest = if (loaded.isNullOrEmpty()) {
+                itemDao.newestUnreadSec(feedIds) ?: (clock() / 1000)
+            } else {
+                loaded.maxOf { it.publishedSec }
+            }
+            queue.markAll(v, feedIds, newest)
             // the refresh must see the mark-all in the queue
             queue.awaitApplied()
             startRefresh(indicator = true)

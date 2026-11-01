@@ -127,7 +127,6 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     val message by vm.message.collectAsStateWithLifecycle()
     val view by vm.view.collectAsStateWithLifecycle()
     val picker by vm.picker.collectAsStateWithLifecycle()
-    val canMarkAll by vm.canMarkAll.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val arm = remember { MarkAllArm() }
@@ -192,7 +191,6 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         entries = picker,
         selected = view,
         markCount = count,
-        markEnabled = canMarkAll,
         armed = arm.armed,
         animate = !reducedMotion,
         onToggleFolder = vm::toggleFolder,
@@ -203,7 +201,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
             scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
         },
         onMarkAll = {
-            if (arm.tap(canMarkAll && count > 0)) {
+            if (arm.tap(count > 0)) {
                 haptics.tick()
                 vm.markAllRead()
                 scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
@@ -225,10 +223,9 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         listState = listState,
         onRefresh = vm::refresh,
         onOpenPicker = { scope.launch { drawerState.show(open = true, animate = !reducedMotion) } },
-        canMarkAll = canMarkAll,
         markArmed = arm.armed,
         onMarkAll = {
-            if (arm.tap(canMarkAll && count > 0)) {
+            if (arm.tap(count > 0)) {
                 haptics.tick()
                 vm.markAllRead()
             }
@@ -288,7 +285,6 @@ fun ListContent(
     onOpenPicker: () -> Unit,
     onOpen: (RowModel) -> Unit,
     onFrame: (ListFrame) -> Boolean,
-    canMarkAll: Boolean = true,
     markArmed: Boolean = false,
     onMarkAll: () -> Unit = {},
     onShowText: (RowModel) -> Unit = {},
@@ -315,7 +311,7 @@ fun ListContent(
 
     Box(Modifier.fillMaxSize().background(WickColors.Night)) {
         Column(Modifier.fillMaxSize()) {
-            Header(viewName, count, animate = !reducedMotion, canMarkAll, markArmed, onMarkAll, onOpenPicker)
+            Header(viewName, count, animate = !reducedMotion, markArmed, onMarkAll, onOpenPicker)
             if (message != null) {
                 Text(
                     message,
@@ -442,7 +438,6 @@ private fun Header(
     name: String,
     count: Int,
     animate: Boolean,
-    canMarkAll: Boolean,
     markArmed: Boolean,
     onMarkAll: () -> Unit,
     onClick: () -> Unit,
@@ -493,7 +488,7 @@ private fun Header(
             Spacer(Modifier.width(10.dp))
             Text(count.toString(), style = CountStyle, color = countColor, modifier = Modifier.alignByBaseline())
         }
-        if (count > 0 && canMarkAll) {
+        if (count > 0) {
             Spacer(Modifier.width(4.dp))
             MarkAll(count, markArmed, animate, onMarkAll)
         }

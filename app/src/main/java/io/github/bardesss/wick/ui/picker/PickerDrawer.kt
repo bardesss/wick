@@ -88,7 +88,6 @@ fun PickerDrawer(
     entries: List<PickerEntry>,
     selected: StreamId,
     markCount: Int,
-    markEnabled: Boolean,
     armed: Boolean,
     animate: Boolean,
     onSelect: (StreamId) -> Unit,
@@ -107,7 +106,7 @@ fun PickerDrawer(
                 drawerContentColor = WickColors.Paper,
                 drawerTonalElevation = 0.dp,
             ) {
-                DrawerBody(entries, selected, markCount, markEnabled, armed, animate, onSelect, onMarkAll, onSettings, onToggleFolder)
+                DrawerBody(entries, selected, markCount, armed, animate, onSelect, onMarkAll, onSettings, onToggleFolder)
             }
         },
         drawerState = state,
@@ -122,7 +121,6 @@ private fun DrawerBody(
     entries: List<PickerEntry>,
     selected: StreamId,
     markCount: Int,
-    markEnabled: Boolean,
     armed: Boolean,
     animate: Boolean,
     onSelect: (StreamId) -> Unit,
@@ -139,7 +137,7 @@ private fun DrawerBody(
             }
         }
         Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 12.dp, bottom = 12.dp)) {
-            MarkAllButton(markCount, markEnabled && markCount > 0, armed, animate, onMarkAll)
+            MarkAllButton(markCount, markCount > 0, armed, animate, onMarkAll)
             Text(
                 stringResource(R.string.settings),
                 style = LinkStyle,
