@@ -25,13 +25,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -44,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.ui.Wordmark
+import io.github.bardesss.wick.ui.resolve
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
@@ -58,7 +62,8 @@ fun LoginScreen(viewModel: LoginViewModel) {
 fun LoginContent(state: LoginState, onSignIn: (String, String, String) -> Unit) {
     var server by rememberSaveable { mutableStateOf("") }
     var user by rememberSaveable { mutableStateOf("") }
-    var key by rememberSaveable { mutableStateOf("") }
+    // the key stays out of saved state, which the system keeps on disk
+    var key by remember { mutableStateOf("") }
     val focus = LocalFocusManager.current
     val submit = { onSignIn(server, user, key) }
 
@@ -162,12 +167,13 @@ fun LoginContent(state: LoginState, onSignIn: (String, String, String) -> Unit) 
 
         state.error?.let {
             Text(
-                text = it,
+                text = it.resolve(),
                 style = WickText.Meta.copy(fontSize = 14.sp),
                 color = WickColors.Amber,
                 modifier = Modifier
                     .padding(top = 16.dp)
-                    .align(Alignment.Start),
+                    .align(Alignment.Start)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
         Spacer(Modifier.height(32.dp))

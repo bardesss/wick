@@ -24,11 +24,12 @@ import io.github.bardesss.wick.html.htmlToAnnotated
 import io.github.bardesss.wick.html.leadImageUrl
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
-import io.github.bardesss.wick.ui.login.LoginMessages
 import io.github.bardesss.wick.ui.picker.PickerEntry
 import io.github.bardesss.wick.ui.picker.buildPicker
 import io.github.bardesss.wick.ui.picker.foldPicker
 import io.github.bardesss.wick.ui.picker.hideEmpty
+import io.github.bardesss.wick.ui.Note
+import io.github.bardesss.wick.ui.note
 import io.github.bardesss.wick.ui.resolveIcon
 import io.github.bardesss.wick.ui.sheet.SheetBody
 import kotlinx.coroutines.CancellationException
@@ -163,10 +164,10 @@ class ListViewModel(
     /** True while the pull indicator should show. */
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
-    private val _message = MutableStateFlow<String?>(null)
+    private val _message = MutableStateFlow<Note?>(null)
 
     /** A quiet note under the header after a refresh failed. */
-    val message: StateFlow<String?> = _message.asStateFlow()
+    val message: StateFlow<Note?> = _message.asStateFlow()
 
     init {
         savedState[KEY_VIEW] = _view.value.raw
@@ -333,7 +334,7 @@ class ListViewModel(
                             if (e == ApiError.BadCredentials) {
                                 creds.clear()
                             } else {
-                                _message.value = if (e is ApiError) LoginMessages.of(e) else LoginMessages.UNREACHABLE
+                                _message.value = (e as? ApiError ?: ApiError.Unreachable).note()
                             }
                         },
                     )

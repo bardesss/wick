@@ -3,10 +3,13 @@ package io.github.bardesss.wick.ui.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import io.github.bardesss.wick.R
 import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.Auth
 import io.github.bardesss.wick.api.ReaderApi
 import io.github.bardesss.wick.data.CredentialStore
+import io.github.bardesss.wick.ui.Note
+import io.github.bardesss.wick.ui.note
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,23 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class LoginState(val busy: Boolean = false, val error: String? = null)
-
-object LoginMessages {
-    const val UNREACHABLE = "Can't reach the server. Is your VPN on?"
-    const val BAD_CREDENTIALS = "Username or API key is wrong"
-    const val NO_API = "No Google Reader API at this address"
-    const val STORAGE = "Couldn't store the sign in on this device"
-    const val BAD_ADDRESS = "That address doesn't look right"
-    fun http(code: Int) = "The server answered with error $code"
-
-    fun of(e: ApiError) = when (e) {
-        ApiError.Unreachable -> UNREACHABLE
-        ApiError.BadCredentials -> BAD_CREDENTIALS
-        ApiError.NoGReaderApi, ApiError.Malformed -> NO_API
-        is ApiError.Http -> http(e.code)
-    }
-}
+data class LoginState(val busy: Boolean = false, val error: Note? = null)
 
 private val scheme = Regex("^[A-Za-z][A-Za-z0-9+.-]*://")
 
@@ -62,8 +49,13 @@ class LoginViewModel(
     fun signIn(server: String, user: String, key: String) {
         if (_state.value.busy) return
         if (server.isBlank() || user.isBlank() || key.isBlank()) return
-        _state.value = LoginState(busy = true)
         val entered = normaliseApiUrl(server)
+        // the platform refuses plain http, and so does Wick, with a reason
+        if (entered.startsWith("http://", ignoreCase = true)) {
+            _state.value = LoginState(error = Note(R.string.error_needs_https))
+            return
+        }
+        _state.value = LoginState(busy = true)
         viewModelScope.launch {
             var base = entered
             val token = try {
@@ -71,10 +63,10 @@ class LoginViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiError) {
-                _state.value = LoginState(error = LoginMessages.of(e))
+                _state.value = LoginState(error = e.note())
                 return@launch
             } catch (e: Exception) {
-                _state.value = LoginState(error = LoginMessages.BAD_ADDRESS)
+                _state.value = LoginState(error = Note(R.string.error_bad_address))
                 return@launch
             }
             try {
@@ -84,7 +76,7 @@ class LoginViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.value = LoginState(error = LoginMessages.STORAGE)
+                _state.value = LoginState(error = Note(R.string.error_storage))
             }
         }
     }

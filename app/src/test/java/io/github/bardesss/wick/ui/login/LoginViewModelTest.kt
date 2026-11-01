@@ -1,5 +1,6 @@
 package io.github.bardesss.wick.ui.login
 
+import io.github.bardesss.wick.R
 import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.Auth
 import io.github.bardesss.wick.api.Feed
@@ -8,6 +9,7 @@ import io.github.bardesss.wick.api.ReaderApi
 import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.api.UnreadCount
 import io.github.bardesss.wick.data.CredentialStore
+import io.github.bardesss.wick.ui.Note
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -65,7 +67,7 @@ class LoginViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun failWith(error: ApiError): String? {
+    private fun failWith(error: ApiError): Note? {
         api.failure = error
         val vm = LoginViewModel(api, creds)
         vm.signIn("example.com", "me", "key")
@@ -74,23 +76,37 @@ class LoginViewModelTest {
 
     @Test
     fun maps_unreachable_to_vpn_message() {
-        assertEquals("Can't reach the server. Is your VPN on?", failWith(ApiError.Unreachable))
+        assertEquals(Note(R.string.error_unreachable), failWith(ApiError.Unreachable))
     }
 
     @Test
     fun maps_bad_credentials() {
-        assertEquals("Username or API key is wrong", failWith(ApiError.BadCredentials))
+        assertEquals(Note(R.string.error_bad_credentials), failWith(ApiError.BadCredentials))
     }
 
     @Test
     fun maps_no_api() {
-        assertEquals("No Google Reader API at this address", failWith(ApiError.NoGReaderApi))
-        assertEquals("No Google Reader API at this address", failWith(ApiError.Malformed))
+        assertEquals(Note(R.string.error_no_api), failWith(ApiError.NoGReaderApi))
+        assertEquals(Note(R.string.error_malformed), failWith(ApiError.Malformed))
     }
 
     @Test
     fun maps_http_code() {
-        assertEquals("The server answered with error 502", failWith(ApiError.Http(502)))
+        assertEquals(Note(R.string.error_http, 502), failWith(ApiError.Http(502)))
+    }
+
+    @Test
+    fun maps_cleartext_refusal_to_https_message() {
+        assertEquals(Note(R.string.error_needs_https), failWith(ApiError.Cleartext))
+    }
+
+    @Test
+    fun plain_http_address_is_refused_before_any_request() {
+        val vm = LoginViewModel(api, creds)
+        vm.signIn("http://192.168.1.10:8082", "me", "key")
+        assertEquals(Note(R.string.error_needs_https), vm.state.value.error)
+        assertTrue(api.logins.isEmpty())
+        assertFalse(vm.state.value.busy)
     }
 
     @Test
@@ -137,7 +153,7 @@ class LoginViewModelTest {
         val vm = LoginViewModel(api, creds)
         vm.signIn("example.com", "me", "key")
         assertEquals(3, api.logins.size)
-        assertEquals("No Google Reader API at this address", vm.state.value.error)
+        assertEquals(Note(R.string.error_no_api), vm.state.value.error)
         assertNull(creds.auth())
     }
 
@@ -185,7 +201,7 @@ class LoginViewModelTest {
         }
         val vm = LoginViewModel(api, throwing)
         vm.signIn("example.com", "me", "key")
-        assertEquals("Couldn't store the sign in on this device", vm.state.value.error)
+        assertEquals(Note(R.string.error_storage), vm.state.value.error)
         assertFalse(vm.state.value.busy)
     }
 
@@ -197,7 +213,7 @@ class LoginViewModelTest {
         }
         val vm = LoginViewModel(badUrl, creds)
         vm.signIn("exa mple.com", "me", "key")
-        assertEquals("That address doesn't look right", vm.state.value.error)
+        assertEquals(Note(R.string.error_bad_address), vm.state.value.error)
         assertFalse(vm.state.value.busy)
     }
 

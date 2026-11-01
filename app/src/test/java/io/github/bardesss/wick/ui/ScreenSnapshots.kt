@@ -11,10 +11,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import io.github.bardesss.wick.R
 import io.github.bardesss.wick.ui.list.ListContent
 import io.github.bardesss.wick.ui.list.RowModel
 import io.github.bardesss.wick.ui.login.LoginContent
-import io.github.bardesss.wick.ui.login.LoginMessages
 import io.github.bardesss.wick.ui.login.LoginState
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickTheme
@@ -83,7 +83,7 @@ class ScreenSnapshots {
 
     @Test
     fun login_error() = snap("login_error") {
-        LoginContent(LoginState(error = "Username or API key is wrong")) { _, _, _ -> }
+        LoginContent(LoginState(error = Note(R.string.error_bad_credentials))) { _, _, _ -> }
     }
 
     @Test
@@ -111,7 +111,7 @@ class ScreenSnapshots {
         ListContent(
             viewName = "All unread",
             count = 87,
-            message = LoginMessages.UNREACHABLE,
+            message = "Can't reach the server. Is your VPN on?",
             rows = sample,
             read = remember { mutableStateOf(setOf("1", "4", "6")) },
             nowSec = now,

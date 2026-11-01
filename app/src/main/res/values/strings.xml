@@ -46,4 +46,12 @@
     <string name="settings_account">Account</string>
     <string name="settings_source">Source code</string>
     <string name="settings_sign_out">Sign out</string>
+    <string name="error_unreachable">Can\'t reach the server. Is your VPN on?</string>
+    <string name="error_needs_https">Wick needs an https address</string>
+    <string name="error_bad_credentials">Username or API key is wrong</string>
+    <string name="error_no_api">No Google Reader API at this address</string>
+    <string name="error_malformed">The server\'s answer couldn\'t be read</string>
+    <string name="error_http">The server answered with error %1$d</string>
+    <string name="error_storage">Couldn\'t store the sign in on this device</string>
+    <string name="error_bad_address">That address doesn\'t look right</string>
 </resources>

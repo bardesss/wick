@@ -1,15 +1,20 @@
 package io.github.bardesss.wick.api
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.io.IOException
+import java.net.UnknownServiceException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /** Where v0.1.0 served the API, relative to the bare server address it stored. */
 const val LEGACY_API_PATH = "/rest/googlereader"
@@ -25,23 +30,18 @@ class GReaderApi(
 
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
+    // the edit token belongs to the sign in it was fetched for
     @Volatile
-    private var editToken: String? = null
+    private var editToken: Pair<Auth, String>? = null
 
     override suspend fun login(server: String, user: String, apiKey: String): String {
         val url = root(server).newBuilder().addPathSegments("accounts/ClientLogin").build()
         val body = FormBody.Builder().add("Email", user).add("Passwd", apiKey).build()
         val request = Request.Builder().url(url).post(body).build()
-        val text = execute(request) { code ->
-            when (code) {
-                401, 403 -> ApiError.BadCredentials
-                404 -> ApiError.NoGReaderApi
-                else -> null
-            }
-        }
-        return text.lineSequence().firstOrNull { it.startsWith("Auth=") }
-            ?.removePrefix("Auth=")?.trim()?.takeIf { it.isNotEmpty() }
-            ?: throw ApiError.BadCredentials
+        val text = execute(request) { code -> if (code == 404) ApiError.NoGReaderApi else null }
+        // a 2xx without an Auth line at all is some other web app answering this path
+        val line = text.lineSequence().firstOrNull { it.startsWith("Auth=") } ?: throw ApiError.NoGReaderApi
+        return line.removePrefix("Auth=").trim().takeIf { it.isNotEmpty() } ?: throw ApiError.BadCredentials
     }
 
     override suspend fun feeds(): List<Feed> {
@@ -145,7 +145,8 @@ class GReaderApi(
         val a = currentAuth()
         var retried = false
         while (true) {
-            val token = editToken ?: fetchToken(a).also { editToken = it }
+            val token = editToken?.takeIf { it.first == a }?.second
+                ?: fetchToken(a).also { editToken = a to it }
             val request = Request.Builder()
                 .url(apiUrl(a, path))
                 .header("Authorization", "GoogleLogin auth=${a.token}")
@@ -165,17 +166,33 @@ class GReaderApi(
         }
     }
 
+    /** Runs [request]; cancelling the caller cancels the call at once, not after OkHttp's own timeouts. */
     private suspend fun execute(request: Request, map: (Int) -> ApiError? = { null }): String =
-        withContext(Dispatchers.IO) {
-            try {
-                client.newCall(request).execute().use { r ->
-                    if (!r.isSuccessful) {
-                        throw (map(r.code) ?: if (r.code == 401) ApiError.BadCredentials else ApiError.Http(r.code))
+        suspendCancellableCoroutine { cont ->
+            val call = client.newCall(request)
+            cont.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) = cont.resumeWithException(e.toApiError())
+
+                override fun onResponse(call: Call, response: Response) {
+                    val text = try {
+                        response.use { r ->
+                            if (!r.isSuccessful) throw (map(r.code) ?: statusError(r.code))
+                            r.body.string()
+                        }
+                    } catch (e: Exception) {
+                        cont.resumeWithException(if (e is IOException) e.toApiError() else e)
+                        return
                     }
-                    r.body?.string().orEmpty()
+                    cont.resume(text)
                 }
-            } catch (e: IOException) {
-                throw ApiError.Unreachable
-            }
+            })
         }
+
+    private fun statusError(code: Int): ApiError =
+        if (code == 401 || code == 403) ApiError.BadCredentials else ApiError.Http(code)
+
+    // the platform refuses plain http, which is not the same as a server that cannot be reached
+    private fun IOException.toApiError(): ApiError =
+        if (this is UnknownServiceException) ApiError.Cleartext else ApiError.Unreachable
 }

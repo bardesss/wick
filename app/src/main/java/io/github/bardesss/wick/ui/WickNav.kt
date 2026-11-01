@@ -30,7 +30,6 @@ import io.github.bardesss.wick.ui.theme.WickColors
 import androidx.compose.foundation.background
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.testTagsAsResourceId
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -38,8 +37,9 @@ import kotlinx.coroutines.launch
 fun WickNav(container: AppContainer) {
     val auth by container.creds.authFlow.collectAsStateWithLifecycle()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
-    // the list is gone while the account is wiped, so nothing can write to the database meanwhile
-    var signingOut by rememberSaveable { mutableStateOf(false) }
+    // the list is gone while the account is wiped, so nothing can write to the database meanwhile;
+    // not saved, since the sign out dies with the process and a restore must not wait for it
+    var signingOut by remember { mutableStateOf(false) }
     val session: SessionScope = viewModel { SessionScope(createSavedStateHandle()) }
     // view models for the signed in session are created from the activity's extras, so their
     // saved state lives with the activity while the session store decides how long they live
@@ -68,7 +68,7 @@ fun WickNav(container: AppContainer) {
                 extras = activityExtras,
             )
             // the list stays composed under the settings page, so it keeps its place
-            Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
+            Box(Modifier.fillMaxSize().benchTags()) {
                 Box(
                     Modifier.fillMaxSize().then(
                         if (settingsOpen) Modifier.semantics { hideFromAccessibility() } else Modifier,

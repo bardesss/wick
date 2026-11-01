@@ -93,6 +93,7 @@ import io.github.bardesss.wick.ui.picker.PickerDrawer
 import io.github.bardesss.wick.ui.picker.show
 import io.github.bardesss.wick.ui.rememberHaptics
 import io.github.bardesss.wick.ui.rememberReducedMotion
+import io.github.bardesss.wick.ui.resolve
 import io.github.bardesss.wick.ui.sheet.SheetBody
 import io.github.bardesss.wick.ui.sheet.SummarySheet
 import io.github.bardesss.wick.ui.theme.InstrumentSans
@@ -231,7 +232,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     ListContent(
         viewName = name ?: stringResource(R.string.list_all_unread),
         count = count,
-        message = message,
+        message = message?.resolve(),
         rows = rows,
         read = read,
         nowSec = nowSec,

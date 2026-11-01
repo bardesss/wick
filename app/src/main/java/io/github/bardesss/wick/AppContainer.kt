@@ -29,6 +29,7 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 class AppContainer(val context: Context) {
     val db: WickDb by lazy {
@@ -47,7 +48,8 @@ class AppContainer(val context: Context) {
             CoroutineExceptionHandler { _, e -> Log.e("Wick", "uncaught error in app scope", e) },
     )
 
-    val http: OkHttpClient by lazy { OkHttpClient() }
+    // a cap on the whole call, so a server that trickles its answer cannot hold a sync forever
+    val http: OkHttpClient by lazy { OkHttpClient.Builder().callTimeout(60, TimeUnit.SECONDS).build() }
 
     val api: ReaderApi by lazy {
         if (BuildConfig.FAKE_ENABLED && FakeServerMode.active) FakeServerMode.Api() else GReaderApi(http) { creds.auth() }
@@ -65,26 +67,33 @@ class AppContainer(val context: Context) {
 
     val imageLoader: ImageLoader by lazy {
         // shares the connection pool with the API client, but only favicon requests get the key
-        val client = http.newBuilder().addInterceptor(FaviconAuth { creds.auth() }).build()
-        faviconLoader(context, client, context.cacheDir.resolve("favicons"))
+        val client = http.newBuilder()
+            .addInterceptor(FaviconAuth { creds.auth() })
+            // lead images come from other hosts, which learn no more than that this is an Android app
+            .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", IMAGE_USER_AGENT).build()) }
+            .build()
+        // the directory keeps its old name so an update reuses the cache
+        buildImageLoader(context, client, context.cacheDir.resolve("favicons"))
     }
 
-    /** Drops every cached favicon, in memory and on disk. Blocks on the disk, so call it off the main thread. */
+    /** Drops every cached image (favicons and lead images), in memory and on disk. Blocks on the disk, so call it off the main thread. */
     fun clearImages() {
         imageLoader.memoryCache?.clear()
         imageLoader.diskCache?.clear()
     }
 }
 
-/** Coil loader for favicons. Memory and disk caches are keyed by the plain icon URL. */
-fun faviconLoader(context: Context, client: OkHttpClient, diskDir: File): ImageLoader =
+private const val IMAGE_USER_AGENT = "Mozilla/5.0 (Android) Wick"
+
+/** Coil loader for favicons and lead images. Memory and disk caches are keyed by the plain image URL. */
+fun buildImageLoader(context: Context, client: OkHttpClient, diskDir: File): ImageLoader =
     ImageLoader.Builder(context)
         .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }
         .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.05).build() }
         .diskCache {
             DiskCache.Builder()
                 .directory(diskDir.toOkioPath())
-                .maxSizeBytes(16L * 1024 * 1024)
+                .maxSizeBytes(64L * 1024 * 1024)
                 .build()
         }
         .build()

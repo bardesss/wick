@@ -37,16 +37,20 @@ fun siteRoot(apiUrl: String): String {
     return url.dropLast(suffix.length).trimEnd('/')
 }
 
-/** Absolute URLs as they are, relative ones against the site of the API at [server], null when there is no icon. */
+/**
+ * Absolute URLs as they are, relative ones against the site of the API at [server], null when
+ * there is no icon. Only http and https come back, so the image loader never reads a local file.
+ */
 fun resolveIcon(server: String, iconUrl: String?): String? {
     val icon = iconUrl?.trim()
     if (icon.isNullOrEmpty()) return null
-    return try {
+    val resolved = try {
         val uri = URI(icon)
         if (uri.isAbsolute) icon else URI(siteRoot(server) + "/").resolve(uri).toString()
     } catch (e: Exception) {
-        null
+        return null
     }
+    return resolved.takeIf(::isWebUrl)
 }
 
 private val TileShape = RoundedCornerShape(6.dp)

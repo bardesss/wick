@@ -39,8 +39,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -57,6 +55,7 @@ import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.format.formatAge
 import io.github.bardesss.wick.ui.Favicon
+import io.github.bardesss.wick.ui.benchTags
 import io.github.bardesss.wick.ui.list.RowModel
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.theme.InstrumentSans
@@ -112,7 +111,7 @@ fun SummarySheet(
         dragHandle = { BottomSheetDefaults.DragHandle(width = 36.dp, height = 4.dp, color = WickColors.Handle) },
     ) {
         // the sheet is its own window, so it needs its own resource id switch
-        Box(Modifier.semantics { testTagsAsResourceId = true }.testTag("sheet")) {
+        Box(Modifier.benchTags().testTag("sheet")) {
             SheetContent(row, body, nowSec, linkTarget, onOpen)
         }
     }

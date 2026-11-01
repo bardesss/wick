@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import io.github.bardesss.wick.R
 import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.Auth
 import io.github.bardesss.wick.api.StreamId
@@ -19,7 +20,7 @@ import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.sync.inMemoryDb
 import io.github.bardesss.wick.sync.newQueue
-import io.github.bardesss.wick.ui.login.LoginMessages
+import io.github.bardesss.wick.ui.Note
 import io.github.bardesss.wick.ui.picker.PickerEntry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -236,7 +237,7 @@ class ListViewModelTest {
         api.failNext(1)
         vm.refresh()
 
-        assertEquals(LoginMessages.UNREACHABLE, settle(vm.message) { it != null })
+        assertEquals(Note(R.string.error_unreachable), settle(vm.message) { it != null })
         assertEquals(listOf("b", "a"), vm.rows.value?.map { it.id })
 
         vm.refresh()
