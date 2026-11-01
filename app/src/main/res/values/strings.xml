@@ -11,6 +11,10 @@
     <string name="list_all_unread">All unread</string>
     <string name="caught_up_title">All caught up</string>
     <string name="caught_up_check">Check for new items</string>
+    <plurals name="list_new_items">
+        <item quantity="one">%d new</item>
+        <item quantity="other">%d new</item>
+    </plurals>
     <string name="list_marked_read">Marked read</string>
     <string name="list_marked_unread">Marked unread</string>
     <string name="sheet_age">%1$s ago</string>

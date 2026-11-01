@@ -65,6 +65,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -103,8 +104,16 @@ private val TapTarget = 48.dp
 private val MarkAllHeight = 32.dp
 private val MarkAllShape = RoundedCornerShape(18.dp)
 private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp)
+private val PillShape = RoundedCornerShape(16.dp)
+private val PillStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 13.sp)
 private const val ARM_TIMEOUT_MS = 4000L
 private const val FOOTER_KEY = 0
+
+/**
+ * How many unread items the header counts that the list does not show. Background sync moves the
+ * count; the list only changes on a refresh.
+ */
+fun newItems(count: Int, unreadRowsInSnapshot: Int): Int = (count - unreadRowsInSnapshot).coerceAtLeast(0)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -315,6 +324,12 @@ fun ListContent(
                 )
             }
             val pull = rememberPullToRefreshState()
+            val newCount by remember(rows) {
+                derivedStateOf {
+                    if (rows == null) 0 else newItems(count, rows.count { it.id !in read.value })
+                }
+            }
+            Box(Modifier.fillMaxSize()) {
             PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = onRefresh,
@@ -374,6 +389,8 @@ fun ListContent(
                     }
                 }
             }
+            if (newCount > 0 && !refreshing) NewItemsPill(newCount, onRefresh, Modifier.align(Alignment.TopCenter))
+            }
         }
         SnackbarHost(
             snackbar,
@@ -391,6 +408,31 @@ fun ListContent(
                     .padding(horizontal = 16.dp, vertical = 10.dp),
             )
         }
+    }
+}
+
+/** Says that the header counts items the list does not show; a tap refreshes. */
+@Composable
+private fun NewItemsPill(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    // the pill is smaller than a finger, so the tap target around it is 48dp
+    Box(
+        modifier
+            .heightIn(min = TapTarget)
+            .widthIn(min = TapTarget)
+            .semantics { role = Role.Button }
+            .clickable(onClick = onClick)
+            .testTag("new_items"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            pluralStringResource(R.plurals.list_new_items, count, count),
+            style = PillStyle,
+            color = WickColors.Amber,
+            maxLines = 1,
+            modifier = Modifier
+                .background(WickColors.Raised, PillShape)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+        )
     }
 }
 
