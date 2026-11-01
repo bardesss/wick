@@ -140,6 +140,25 @@ class ScreenSnapshots {
     }
 
     @Test
+    fun list_armed() = snap("list_armed") {
+        ListContent(
+            viewName = "All unread",
+            count = 87,
+            message = null,
+            rows = sample,
+            read = remember { mutableStateOf(setOf("1", "4")) },
+            nowSec = now,
+            refreshing = false,
+            listState = rememberLazyListState(),
+            onRefresh = {},
+            onOpenPicker = {},
+            onOpen = {},
+            onFrame = { false },
+            markArmed = true,
+        )
+    }
+
+    @Test
     fun list_swipes() = snap("list_swipes") {
         // row 2 dragged right past the threshold, row 5 dragged left past it
         val px = with(LocalDensity.current) { 100.dp.toPx() }

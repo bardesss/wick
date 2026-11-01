@@ -63,6 +63,13 @@ class MarkAllArm {
         return was
     }
 
+    /** One tap: arms when idle and [canMark], and returns true when this tap should mark. */
+    fun tap(canMark: Boolean): Boolean {
+        if (armed) return confirm()
+        if (canMark) arm()
+        return false
+    }
+
     fun disarm() {
         armed = false
     }
