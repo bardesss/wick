@@ -133,7 +133,8 @@ class KeystoreCredentialStore(
         }
         if (prefs[formatKey] == FORMAT) return auth
         val migrated = auth.copy(server = auth.server.trimEnd('/') + LEGACY_API_PATH)
-        write(migrated)
+        // a failed rewrite is redone on the next start, so it must not stop this one
+        runCatching { write(migrated) }
         return migrated
     }
 
