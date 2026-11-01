@@ -66,9 +66,8 @@ class FooterPullConnectionTest {
         assertEquals(300f, drag(300f).y, 0.01f)
         assertTrue(state.distanceFraction >= 1f)
 
-        pull.release()
         fling()
-        pull.release()
+        fling()
         assertEquals(1, refreshed)
     }
 
@@ -81,7 +80,6 @@ class FooterPullConnectionTest {
         drag(-150f)
         assertEquals(0.75f, state.distanceFraction, 0.01f)
 
-        pull.release()
         fling()
         assertEquals(0, refreshed)
         assertEquals(0f, state.distanceFraction, 0.01f)
@@ -100,28 +98,23 @@ class FooterPullConnectionTest {
     }
 
     @Test
-    fun a_cancelled_gesture_resets_the_indicator() {
+    fun a_stop_with_no_speed_resets_a_short_pull() {
         setUp()
-        drag(300f)
+        drag(60f)
+        assertTrue(state.distanceFraction > 0f)
 
-        // cancelled even past the threshold: no refresh, and the indicator goes away
-        pull.cancel()
+        runBlocking { pull.onPreFling(Velocity.Zero) }
         rule.waitForIdle()
-        fling()
         assertEquals(0, refreshed)
         assertEquals(0f, state.distanceFraction, 0.01f)
     }
 
     @Test
-    fun a_release_without_a_fling_resets_a_short_pull() {
+    fun the_fling_after_a_pull_is_taken_whole() {
         setUp()
-        drag(60f)
-        assertTrue(state.distanceFraction > 0f)
-
-        pull.release()
-        rule.waitForIdle()
-        assertEquals(0, refreshed)
-        assertEquals(0f, state.distanceFraction, 0.01f)
+        drag(300f)
+        assertEquals(Velocity(0f, 500f), runBlocking { pull.onPreFling(Velocity(0f, 500f)) })
+        assertEquals(Velocity.Zero, runBlocking { pull.onPreFling(Velocity(0f, 500f)) })
     }
 
     @Test
@@ -130,7 +123,6 @@ class FooterPullConnectionTest {
         drag(300f)
         refreshing = true
 
-        pull.release()
         fling()
         assertEquals(0, refreshed)
     }

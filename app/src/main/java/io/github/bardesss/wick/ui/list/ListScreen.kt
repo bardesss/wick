@@ -34,6 +34,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -56,11 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -94,7 +91,6 @@ import io.github.bardesss.wick.ui.sheet.SummarySheet
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -294,6 +290,8 @@ fun ListContent(
     onSwipeTick: () -> Unit = {},
     reducedMotion: Boolean = false,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
+    /** The state behind the indicator of a pull that starts on the footer; a test can read it. */
+    footerPullState: PullToRefreshState = rememberPullToRefreshState(),
     /** Fixed sideways offsets in px by row id, for previews. */
     swipePreview: Map<String, Float> = emptyMap(),
 ) {
@@ -328,10 +326,17 @@ fun ListContent(
             val refreshNow by rememberUpdatedState(onRefresh)
             val pullScope = rememberCoroutineScope()
             val density = LocalDensity.current
-            val footerPull = remember(listState, pull) {
+            // a pull that starts on the footer has its own state and indicator, apart from the box's
+            var footerOwned by remember { mutableStateOf(false) }
+            val footerBusy = footerOwned && refreshing
+            LaunchedEffect(refreshing) { if (!refreshing) footerOwned = false }
+            LaunchedEffect(footerBusy) {
+                if (footerBusy) footerPullState.animateToThreshold() else if (!refreshingNow) footerPullState.animateToHidden()
+            }
+            val footerPull = remember(listState, footerPullState) {
                 val slackPx = with(density) { FOOTER_SLACK.toPx() }
                 FooterPull(
-                    state = pull,
+                    state = footerPullState,
                     scope = pullScope,
                     thresholdPx = with(density) { PullToRefreshDefaults.PositionalThreshold.toPx() },
                     // the footer is the first item on screen and has hardly moved up
@@ -340,16 +345,24 @@ fun ListContent(
                             listState.firstVisibleItemScrollOffset <= slackPx
                     },
                     refreshing = { refreshingNow },
-                    onRefresh = { refreshNow() },
+                    onRefresh = {
+                        footerOwned = true
+                        refreshNow()
+                    },
                 )
             }
+            // the footer pull sits above the box, so it sees every drag and fling first
+            Box(Modifier.fillMaxSize().nestedScroll(footerPull)) {
             PullToRefreshBox(
                 isRefreshing = refreshing,
-                onRefresh = onRefresh,
+                onRefresh = {
+                    footerOwned = false
+                    onRefresh()
+                },
                 state = pull,
                 modifier = Modifier.fillMaxSize(),
                 indicator = {
-                    PullToRefreshDefaults.Indicator(
+                    if (!footerBusy) PullToRefreshDefaults.Indicator(
                         state = pull,
                         isRefreshing = refreshing,
                         containerColor = WickColors.Raised,
@@ -361,26 +374,7 @@ fun ListContent(
                 // laying out an empty list before the rows arrive would reset a restored scroll position
                 if (rows != null) BoxWithConstraints(Modifier.fillMaxSize()) {
                     val footerHeight = maxHeight
-                    LazyColumn(state = listState, modifier = Modifier
-                            .fillMaxSize()
-                            .nestedScroll(footerPull)
-                            // a gesture that ends without a fling, or is cancelled, still ends the pull
-                            .pointerInput(footerPull) {
-                                awaitEachGesture {
-                                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                                    try {
-                                        do {
-                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                        } while (event.changes.any { it.pressed })
-                                        footerPull.release()
-                                    } catch (e: CancellationException) {
-                                        footerPull.cancel()
-                                        throw e
-                                    }
-                                }
-                            }
-                            .testTag("list"),
-                    ) {
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("list")) {
                         itemsIndexed(rows, key = { _, row -> row.id }, contentType = { _, _ -> "item" }) { index, row ->
                             val isRead by remember(row.id) { derivedStateOf { row.id in read.value } }
                             SwipeRow(
@@ -420,6 +414,14 @@ fun ListContent(
                         }
                     }
                 }
+            }
+            PullToRefreshDefaults.Indicator(
+                state = footerPullState,
+                isRefreshing = footerBusy,
+                containerColor = WickColors.Raised,
+                color = WickColors.Amber,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
             }
         }
         SnackbarHost(
