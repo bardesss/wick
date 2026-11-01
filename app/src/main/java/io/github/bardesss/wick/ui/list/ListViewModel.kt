@@ -2,7 +2,6 @@ package io.github.bardesss.wick.ui.list
 
 import android.util.Log
 import androidx.compose.runtime.Immutable
-import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.createSavedStateHandle
@@ -22,6 +21,7 @@ import io.github.bardesss.wick.db.LocalState
 import io.github.bardesss.wick.db.SnapshotDao
 import io.github.bardesss.wick.db.SnapshotRow
 import io.github.bardesss.wick.html.htmlToAnnotated
+import io.github.bardesss.wick.html.leadImageUrl
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.ui.login.LoginMessages
@@ -30,6 +30,7 @@ import io.github.bardesss.wick.ui.picker.buildPicker
 import io.github.bardesss.wick.ui.picker.foldPicker
 import io.github.bardesss.wick.ui.picker.hideEmpty
 import io.github.bardesss.wick.ui.resolveIcon
+import io.github.bardesss.wick.ui.sheet.SheetBody
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -281,8 +282,15 @@ class ListViewModel(
     /** Where links open. */
     val linkTarget: Flow<LinkTarget> get() = settings.linkTarget
 
-    /** The feed's text for the sheet, read and converted off the main thread. Null when it sent none. */
-    suspend fun sheetText(id: String): AnnotatedString? = withContext(work) { htmlToAnnotated(itemDao.htmlOf(id)) }
+    /**
+     * What the sheet shows for an item, read and converted off the main thread. The text is null
+     * when the feed sent none; there is no image address when images are off.
+     */
+    suspend fun sheetBody(id: String, link: String?): SheetBody.Ready = withContext(work) {
+        val html = itemDao.htmlOf(id)
+        val image = if (settings.leadImages.first()) leadImageUrl(html, link) else null
+        SheetBody.Ready(htmlToAnnotated(html), image)
+    }
 
     /** Queued marks are sent by the flush job the app enqueues when it stops. */
     fun onBackground() {

@@ -35,6 +35,7 @@
     <string name="settings_empty_feeds">Feeds with no unread</string>
     <string name="settings_show">Show</string>
     <string name="settings_hide">Hide</string>
+    <string name="settings_images">Images in summary</string>
     <string name="settings_haptics">Haptics</string>
     <string name="settings_on">On</string>
     <string name="settings_off">Off</string>

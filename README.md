@@ -39,7 +39,7 @@ Wick shows one list of headlines. You read it top to bottom, and items drop off 
 - **Works offline.** Read marks are queued on the phone and sent once the server is reachable again, so a flaky VPN loses nothing.
 - **Quiet background sync.** An hourly sync keeps the list fresh. There are no notifications, ever.
 - **Fast and small.** Native Kotlin and Jetpack Compose on a local database. The APK is about 2 MB.
-- **Private.** No accounts, no analytics, no ads, no trackers. Wick talks to your own server, and articles open in your browser.
+- **Private.** No accounts, no analytics, no ads, no trackers. Wick talks to your own server, and articles open in your browser. The one exception is the image at the top of a summary, which loads from the article's site; you can turn it off in Settings.
 - **Dark by design.** Warm candlelight accents on a near-black background, easy on the eyes at night.
 
 ## Requirements

@@ -23,9 +23,13 @@ class SettingsStore(private val store: DataStore<Preferences>) {
     private val oldestFirstKey = booleanPreferencesKey("oldest_first")
     private val hapticsKey = booleanPreferencesKey("haptics")
 
+    private val leadImagesKey = booleanPreferencesKey("lead_images")
     private val hideEmptyKey = booleanPreferencesKey("hide_empty")
 
     val oldestFirst: Flow<Boolean> = store.data.map { it[oldestFirstKey] ?: false }
+
+    /** Whether the summary sheet loads the article's first image. */
+    val leadImages: Flow<Boolean> = store.data.map { it[leadImagesKey] ?: true }
 
     /** Whether the drawer leaves out feeds and folders with nothing unread. */
     val hideEmpty: Flow<Boolean> = store.data.map { it[hideEmptyKey] ?: false }
@@ -43,6 +47,10 @@ class SettingsStore(private val store: DataStore<Preferences>) {
 
     suspend fun setOldestFirst(value: Boolean) {
         store.edit { it[oldestFirstKey] = value }
+    }
+
+    suspend fun setLeadImages(value: Boolean) {
+        store.edit { it[leadImagesKey] = value }
     }
 
     suspend fun setHideEmpty(value: Boolean) {

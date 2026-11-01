@@ -520,6 +520,22 @@ class ListViewModelTest {
     }
 
     @Test
+    fun the_sheet_has_an_image_only_while_the_setting_is_on() = runTest(main, timeout = 30.seconds) {
+        engine()
+        api.addItem("a", "feed/1", 100, html = "<p>Text</p><img src=\"/pic.jpg\">", url = "https://e.x/post")
+        val vm = vm()
+        ids(vm, listOf("a"))
+
+        assertEquals("https://e.x/pic.jpg", vm.sheetBody("a", "https://e.x/post").imageUrl)
+
+        settings.setLeadImages(false)
+        val off = vm.sheetBody("a", "https://e.x/post")
+
+        assertNull(off.imageUrl)
+        assertEquals("Text", off.text?.text)
+    }
+
+    @Test
     fun selecting_the_current_view_refreshes() = runTest(main, timeout = 30.seconds) {
         engine()
         seedServer()

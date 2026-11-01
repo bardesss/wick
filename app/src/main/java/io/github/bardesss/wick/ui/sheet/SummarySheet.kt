@@ -1,10 +1,13 @@
 package io.github.bardesss.wick.ui.sheet
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -22,10 +25,15 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -39,9 +47,12 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.format.formatAge
@@ -56,12 +67,18 @@ import io.github.bardesss.wick.ui.theme.WickText
 /** The sheet body: not read yet, or read with [text] null when the feed sent none. */
 sealed interface SheetBody {
     data object Loading : SheetBody
-    data class Ready(val text: AnnotatedString?) : SheetBody
+    data class Ready(val text: AnnotatedString?, val imageUrl: String? = null) : SheetBody
 }
 
 private const val MAX_HEIGHT = 0.78f
+
+// of the sheet's cap
+private const val LEAD_HEIGHT = 0.4f
 private val SheetShape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)
 private val Scrim = Color(0x99040608)
+private val ImageShape = RoundedCornerShape(14.dp)
+private const val PLACEHOLDER_SHAPE = 16f / 9f
+private const val MIN_SIDE_PX = 48
 private val SourceStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
 private val TitleStyle = TextStyle(
     fontFamily = Newsreader,
@@ -101,6 +118,43 @@ fun SummarySheet(
     }
 }
 
+/**
+ * The article's first image, as wide as the text and as tall as its shape says, up to [maxHeight].
+ * A dark box holds the place while it loads. It leaves no trace when the load fails or the image
+ * is too small to be a picture.
+ */
+@Composable
+private fun LeadImage(url: String, maxHeight: Dp) {
+    var shape by remember(url) { mutableStateOf<Float?>(null) }
+    var failed by remember(url) { mutableStateOf(false) }
+    if (failed) return
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 14.dp)) {
+        val height = minOf(maxWidth / (shape ?: PLACEHOLDER_SHAPE), maxHeight)
+        Box(Modifier.fillMaxWidth().height(height).clip(ImageShape).background(WickColors.Night).testTag("lead_image")) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onState = { state ->
+                    when (state) {
+                        is AsyncImagePainter.State.Success -> {
+                            val image = state.result.image
+                            if (minOf(image.width, image.height) < MIN_SIDE_PX) {
+                                failed = true
+                            } else {
+                                shape = image.width.toFloat() / image.height
+                            }
+                        }
+                        is AsyncImagePainter.State.Error -> failed = true
+                        else -> Unit
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
 @Composable
 private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, linkTarget: LinkTarget, onOpen: () -> Unit) {
     val context = LocalContext.current
@@ -119,6 +173,7 @@ private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, linkTarge
                 .verticalScroll(rememberScrollState())
                 .padding(start = 24.dp, end = 24.dp, bottom = 8.dp),
         ) {
+            if (body is SheetBody.Ready && body.imageUrl != null) LeadImage(body.imageUrl, maxHeight * LEAD_HEIGHT)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // the letter tile would vanish on the raised sheet
                 Favicon(row.iconUrl, row.source, faded = false, tile = WickColors.Night)

@@ -45,11 +45,13 @@ private val IdleChoice = Color(0xFFB7BEC6)
 fun SettingsScreen(
     oldestFirst: Boolean?,
     hideEmpty: Boolean?,
+    leadImages: Boolean?,
     haptics: Boolean?,
     linkTarget: LinkTarget?,
     server: String,
     onOldestFirst: (Boolean) -> Unit,
     onHideEmpty: (Boolean) -> Unit,
+    onLeadImages: (Boolean) -> Unit,
     onHaptics: (Boolean) -> Unit,
     onLinkTarget: (LinkTarget) -> Unit,
     onSignOut: () -> Unit,
@@ -79,6 +81,10 @@ fun SettingsScreen(
             Section(stringResource(R.string.settings_empty_feeds)) {
                 Choice(stringResource(R.string.settings_show), hideEmpty == false) { onHideEmpty(false) }
                 Choice(stringResource(R.string.settings_hide), hideEmpty == true) { onHideEmpty(true) }
+            }
+            Section(stringResource(R.string.settings_images)) {
+                Choice(stringResource(R.string.settings_on), leadImages == true) { onLeadImages(true) }
+                Choice(stringResource(R.string.settings_off), leadImages == false) { onLeadImages(false) }
             }
             Section(stringResource(R.string.settings_haptics)) {
                 Choice(stringResource(R.string.settings_on), haptics == true) { onHaptics(true) }

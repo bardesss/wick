@@ -252,7 +252,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     if (sheetRow != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val body by produceState<SheetBody>(SheetBody.Loading, sheetRow.id) {
-            value = SheetBody.Ready(vm.sheetText(sheetRow.id))
+            value = vm.sheetBody(sheetRow.id, sheetRow.url)
         }
         SummarySheet(
             row = sheetRow,

@@ -19,6 +19,7 @@ class SettingsStoreTest {
         assertFalse(s.oldestFirst.first())
         assertTrue(s.haptics.first())
         assertFalse(s.hideEmpty.first())
+        assertTrue(s.leadImages.first())
         assertEquals(LinkTarget.InApp, s.linkTarget.first())
     }
 
