@@ -23,7 +23,12 @@ class SettingsStore(private val store: DataStore<Preferences>) {
     private val oldestFirstKey = booleanPreferencesKey("oldest_first")
     private val hapticsKey = booleanPreferencesKey("haptics")
 
+    private val hideEmptyKey = booleanPreferencesKey("hide_empty")
+
     val oldestFirst: Flow<Boolean> = store.data.map { it[oldestFirstKey] ?: false }
+
+    /** Whether the drawer leaves out feeds and folders with nothing unread. */
+    val hideEmpty: Flow<Boolean> = store.data.map { it[hideEmptyKey] ?: false }
     val haptics: Flow<Boolean> = store.data.map { it[hapticsKey] ?: true }
 
     private val linkTargetKey = stringPreferencesKey("link_target")
@@ -38,6 +43,10 @@ class SettingsStore(private val store: DataStore<Preferences>) {
 
     suspend fun setOldestFirst(value: Boolean) {
         store.edit { it[oldestFirstKey] = value }
+    }
+
+    suspend fun setHideEmpty(value: Boolean) {
+        store.edit { it[hideEmptyKey] = value }
     }
 
     suspend fun setHaptics(value: Boolean) {

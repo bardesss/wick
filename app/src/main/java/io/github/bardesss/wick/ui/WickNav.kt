@@ -112,6 +112,8 @@ fun WickNav(container: AppContainer) {
 private fun SettingsRoute(container: AppContainer, server: String, onSignOut: () -> Unit) {
     val oldestFirst by remember { container.settings.oldestFirst.map<Boolean, Boolean?> { it } }
         .collectAsStateWithLifecycle(initialValue = null)
+    val hideEmpty by remember { container.settings.hideEmpty.map<Boolean, Boolean?> { it } }
+        .collectAsStateWithLifecycle(initialValue = null)
     val haptics by remember { container.settings.haptics.map<Boolean, Boolean?> { it } }
         .collectAsStateWithLifecycle(initialValue = null)
     val linkTarget by remember { container.settings.linkTarget.map<LinkTarget, LinkTarget?> { it } }
@@ -120,10 +122,12 @@ private fun SettingsRoute(container: AppContainer, server: String, onSignOut: ()
     val scope = container.appScope
     SettingsScreen(
         oldestFirst = oldestFirst,
+        hideEmpty = hideEmpty,
         haptics = haptics,
         linkTarget = linkTarget,
         server = server,
         onOldestFirst = { scope.launch { container.settings.setOldestFirst(it) } },
+        onHideEmpty = { scope.launch { container.settings.setHideEmpty(it) } },
         onHaptics = { scope.launch { container.settings.setHaptics(it) } },
         onLinkTarget = { scope.launch { container.settings.setLinkTarget(it) } },
         onSignOut = onSignOut,

@@ -18,6 +18,7 @@ class SettingsStoreTest {
         val s = store()
         assertFalse(s.oldestFirst.first())
         assertTrue(s.haptics.first())
+        assertFalse(s.hideEmpty.first())
         assertEquals(LinkTarget.InApp, s.linkTarget.first())
     }
 

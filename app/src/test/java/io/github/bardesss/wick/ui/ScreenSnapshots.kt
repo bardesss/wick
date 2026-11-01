@@ -310,10 +310,12 @@ class ScreenSnapshots {
     fun settings() = snap("settings") {
         SettingsScreen(
             oldestFirst = false,
+            hideEmpty = false,
             haptics = true,
             linkTarget = LinkTarget.InApp,
             server = "https://feeds.example.com",
             onOldestFirst = {},
+            onHideEmpty = {},
             onHaptics = {},
             onLinkTarget = {},
             onSignOut = {},

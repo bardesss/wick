@@ -32,6 +32,9 @@
     <string name="settings_sort">Sort order</string>
     <string name="settings_newest_first">Newest first</string>
     <string name="settings_oldest_first">Oldest first</string>
+    <string name="settings_empty_feeds">Feeds with no unread</string>
+    <string name="settings_show">Show</string>
+    <string name="settings_hide">Hide</string>
     <string name="settings_haptics">Haptics</string>
     <string name="settings_on">On</string>
     <string name="settings_off">Off</string>

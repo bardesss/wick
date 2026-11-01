@@ -28,6 +28,7 @@ import io.github.bardesss.wick.ui.login.LoginMessages
 import io.github.bardesss.wick.ui.picker.PickerEntry
 import io.github.bardesss.wick.ui.picker.buildPicker
 import io.github.bardesss.wick.ui.picker.foldPicker
+import io.github.bardesss.wick.ui.picker.hideEmpty
 import io.github.bardesss.wick.ui.resolveIcon
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -149,12 +150,14 @@ class ListViewModel(
         feedDao.all(),
         sync.displayedCounts(),
         settings.collapsedFolders,
-    ) { feeds, counts, collapsed ->
+        settings.hideEmpty,
+        _view,
+    ) { feeds, counts, collapsed, hide, selected ->
         val server = creds.auth()?.server.orEmpty()
         val entries = buildPicker(feeds, counts).map { e ->
             if (e is PickerEntry.Feed) e.copy(iconUrl = resolveIcon(server, e.iconUrl)) else e
         }
-        foldPicker(entries, collapsed)
+        foldPicker(if (hide) hideEmpty(entries, selected) else entries, collapsed)
     }
         .flowOn(work)
         .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(PickerEntry.All(0)))

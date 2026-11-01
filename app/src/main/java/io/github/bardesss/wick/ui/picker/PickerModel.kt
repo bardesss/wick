@@ -46,6 +46,31 @@ fun buildPicker(feeds: List<FeedEntity>, counts: Map<String, Int>): List<PickerE
     return result
 }
 
+/**
+ * Leaves out the feeds with nothing unread and the folders whose total is zero. "All unread", the
+ * [selected] view and the folder that holds a selected feed always stay.
+ */
+fun hideEmpty(entries: List<PickerEntry>, selected: StreamId): List<PickerEntry> {
+    var folder: String? = null
+    var selectedFolder: String? = null
+    for (e in entries) {
+        when {
+            e is PickerEntry.Folder -> folder = e.name
+            e is PickerEntry.Feed -> {
+                if (!e.indented) folder = null
+                if (selected == StreamId.Feed(e.id)) selectedFolder = folder
+            }
+        }
+    }
+    return entries.filter { e ->
+        when (e) {
+            is PickerEntry.All -> true
+            is PickerEntry.Folder -> e.count > 0 || selected == StreamId.Folder(e.name) || e.name == selectedFolder
+            is PickerEntry.Feed -> e.count > 0 || selected == StreamId.Feed(e.id)
+        }
+    }
+}
+
 /** Marks the folders in [collapsed] and leaves out their feeds. */
 fun foldPicker(entries: List<PickerEntry>, collapsed: Set<String>): List<PickerEntry> {
     if (collapsed.isEmpty()) return entries

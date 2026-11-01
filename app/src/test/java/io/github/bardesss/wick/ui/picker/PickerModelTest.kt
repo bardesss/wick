@@ -78,6 +78,55 @@ class PickerModelTest {
         assertEquals(entries.size - 2, folded.size)
     }
 
+    private val withCounts = buildPicker(
+        feeds,
+        mapOf(
+            StreamId.All.raw to 8,
+            StreamId.Folder("Tech").raw to 8,
+            "feed/2" to 8,
+            "feed/5" to 0,
+        ),
+    )
+
+    private fun names(list: List<PickerEntry>) = list.map {
+        when (it) {
+            is PickerEntry.All -> "all"
+            is PickerEntry.Folder -> "folder:" + it.name
+            is PickerEntry.Feed -> it.id
+        }
+    }
+
+    @Test
+    fun hiding_drops_feeds_and_folders_with_nothing_unread() {
+        val shown = hideEmpty(withCounts, StreamId.All)
+
+        assertEquals(listOf("all", "folder:Tech", "feed/2"), names(shown))
+    }
+
+    @Test
+    fun hiding_keeps_the_selected_feed() {
+        val shown = hideEmpty(withCounts, StreamId.Feed("feed/5"))
+
+        assertEquals(listOf("all", "folder:Tech", "feed/2", "feed/5"), names(shown))
+    }
+
+    @Test
+    fun hiding_keeps_the_selected_folder_and_the_folder_of_a_selected_feed() {
+        assertEquals(
+            listOf("all", "folder:Food", "folder:Tech", "feed/2"),
+            names(hideEmpty(withCounts, StreamId.Folder("Food"))),
+        )
+        assertEquals(
+            listOf("all", "folder:Food", "feed/6", "folder:Tech", "feed/2"),
+            names(hideEmpty(withCounts, StreamId.Feed("feed/6"))),
+        )
+    }
+
+    @Test
+    fun hiding_keeps_all_unread_when_nothing_is_unread() {
+        assertEquals(listOf("all"), names(hideEmpty(buildPicker(feeds, emptyMap()), StreamId.All)))
+    }
+
     @Test
     fun nothing_collapsed_leaves_the_list_alone() {
         val entries = buildPicker(feeds, emptyMap())
