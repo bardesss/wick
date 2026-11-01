@@ -73,8 +73,8 @@ fun swipeAxis(dx: Float, dy: Float, slop: Float): SwipeAxis = when {
     else -> SwipeAxis.Undecided
 }
 
-/** The width of the left edge where a row leaves the drag alone: at least [minPx], and all of the system's gesture inset. */
-fun edgeZonePx(minPx: Float, gestureInsetPx: Int): Float = maxOf(minPx, gestureInsetPx.toFloat())
+/** The left edge where a rightward drag is left to the drawer: the system's back gesture inset and a margin past it. */
+fun edgeZonePx(gestureInsetPx: Int, marginPx: Float): Float = gestureInsetPx + marginPx
 
 /** Lets one row at a time follow a finger. Not state: nothing draws from it. */
 class SwipeLock {
@@ -91,7 +91,7 @@ class SwipeLock {
     }
 }
 
-private val EdgeZone = 32.dp
+private val EdgeMargin = 24.dp
 private val IconSize = 20.dp
 private val IconInset = 24.dp
 private val FullOpacityAt = 70.dp
@@ -123,6 +123,7 @@ fun SwipeRow(
     onSwipe: (SwipeOutcome) -> Unit,
     modifier: Modifier = Modifier,
     startOffsetPx: Float = 0f,
+    gestureInsetPx: Int = WindowInsets.systemGestures.getLeft(LocalDensity.current, LocalLayoutDirection.current),
     content: @Composable (Modifier) -> Unit,
 ) {
     val offset = remember { mutableFloatStateOf(startOffsetPx) }
@@ -131,10 +132,9 @@ fun SwipeRow(
     val done by rememberUpdatedState(onSwipe)
     val still by rememberUpdatedState(reducedMotion)
     val settle = remember { arrayOfNulls<Job>(1) }
-    // a drag that starts in the left edge belongs to the drawer, and to the system's back gesture
+    // a rightward drag that starts in the left edge belongs to the drawer; the system owns the inset itself
     val density = LocalDensity.current
-    val gestureInset = WindowInsets.systemGestures.getLeft(density, LocalLayoutDirection.current)
-    val edge by rememberUpdatedState(with(density) { edgeZonePx(EdgeZone.toPx(), gestureInset) })
+    val edge by rememberUpdatedState(with(density) { edgeZonePx(gestureInsetPx, EdgeMargin.toPx()) })
 
     Box(
         modifier
@@ -143,7 +143,7 @@ fun SwipeRow(
                 val threshold = SwipeThreshold.toPx()
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    if (down.position.x < edge) return@awaitEachGesture
+                    val fromEdge = down.position.x < edge
                     var dx = 0f
                     var dy = 0f
                     // watch until the touch shows its direction; a scroll that claims it first wins
@@ -156,6 +156,7 @@ fun SwipeRow(
                         when (swipeAxis(dx, dy, viewConfiguration.touchSlop)) {
                             SwipeAxis.Vertical -> return@awaitEachGesture
                             SwipeAxis.Horizontal -> {
+                                if (fromEdge && dx > 0f) return@awaitEachGesture
                                 if (!lock.claim(id)) return@awaitEachGesture
                                 change.consume()
                                 break

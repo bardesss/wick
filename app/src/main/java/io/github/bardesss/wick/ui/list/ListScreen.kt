@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -54,7 +56,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -88,6 +94,7 @@ import io.github.bardesss.wick.ui.sheet.SummarySheet
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -99,6 +106,7 @@ private val NoteStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.sp)
 private val ToastStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 13.5.sp)
 private val ToastShape = RoundedCornerShape(12.dp)
 private val FlameSize = 28.dp
+private val TapTarget = 48.dp
 private val MarkAllHeight = 32.dp
 private val MarkAllShape = RoundedCornerShape(18.dp)
 private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp)
@@ -187,6 +195,8 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         armed = arm.armed,
         animate = !reducedMotion,
         onSelect = { v ->
+            // a view switch must not leave an armed mark all to confirm against the new view
+            arm.disarm()
             vm.select(v)
             scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
         },
@@ -213,6 +223,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         listState = listState,
         onRefresh = vm::refresh,
         onOpenPicker = { scope.launch { drawerState.show(open = true, animate = !reducedMotion) } },
+        canMarkAll = canMarkAll,
         markArmed = arm.armed,
         onMarkAll = {
             if (arm.tap(canMarkAll && count > 0)) {
@@ -275,6 +286,7 @@ fun ListContent(
     onOpenPicker: () -> Unit,
     onOpen: (RowModel) -> Unit,
     onFrame: (ListFrame) -> Boolean,
+    canMarkAll: Boolean = true,
     markArmed: Boolean = false,
     onMarkAll: () -> Unit = {},
     onShowText: (RowModel) -> Unit = {},
@@ -301,7 +313,7 @@ fun ListContent(
 
     Box(Modifier.fillMaxSize().background(WickColors.Night)) {
         Column(Modifier.fillMaxSize()) {
-            Header(viewName, count, animate = !reducedMotion, markArmed, onMarkAll, onOpenPicker)
+            Header(viewName, count, animate = !reducedMotion, canMarkAll, markArmed, onMarkAll, onOpenPicker)
             if (message != null) {
                 Text(
                     message,
@@ -349,7 +361,26 @@ fun ListContent(
                 // laying out an empty list before the rows arrive would reset a restored scroll position
                 if (rows != null) BoxWithConstraints(Modifier.fillMaxSize()) {
                     val footerHeight = maxHeight
-                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(footerPull).testTag("list")) {
+                    LazyColumn(state = listState, modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(footerPull)
+                            // a gesture that ends without a fling, or is cancelled, still ends the pull
+                            .pointerInput(footerPull) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                    try {
+                                        do {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        } while (event.changes.any { it.pressed })
+                                        footerPull.release()
+                                    } catch (e: CancellationException) {
+                                        footerPull.cancel()
+                                        throw e
+                                    }
+                                }
+                            }
+                            .testTag("list"),
+                    ) {
                         itemsIndexed(rows, key = { _, row -> row.id }, contentType = { _, _ -> "item" }) { index, row ->
                             val isRead by remember(row.id) { derivedStateOf { row.id in read.value } }
                             SwipeRow(
@@ -411,7 +442,15 @@ fun ListContent(
 }
 
 @Composable
-private fun Header(name: String, count: Int, animate: Boolean, markArmed: Boolean, onMarkAll: () -> Unit, onClick: () -> Unit) {
+private fun Header(
+    name: String,
+    count: Int,
+    animate: Boolean,
+    canMarkAll: Boolean,
+    markArmed: Boolean,
+    onMarkAll: () -> Unit,
+    onClick: () -> Unit,
+) {
     val chooseView = stringResource(R.string.list_choose_view)
     var tick by remember { mutableStateOf(false) }
     var shown by remember { mutableIntStateOf(count) }
@@ -434,7 +473,9 @@ private fun Header(name: String, count: Int, animate: Boolean, markArmed: Boolea
             .testTag("header")
             .clickable(interactionSource = null, indication = null, onClickLabel = chooseView, role = Role.Button, onClick = onClick)
             .statusBarsPadding()
-            .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 10.dp),
+            .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 6.dp)
+            // the mark all tap target sets the height, so it does not change when that control hides
+            .heightIn(min = TapTarget),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(Modifier.weight(1f)) {
@@ -456,8 +497,8 @@ private fun Header(name: String, count: Int, animate: Boolean, markArmed: Boolea
             Spacer(Modifier.width(10.dp))
             Text(count.toString(), style = CountStyle, color = countColor, modifier = Modifier.alignByBaseline())
         }
-        if (count > 0) {
-            Spacer(Modifier.width(8.dp))
+        if (count > 0 && canMarkAll) {
+            Spacer(Modifier.width(4.dp))
             MarkAll(count, markArmed, animate, onMarkAll)
         }
     }
@@ -471,31 +512,39 @@ private fun MarkAll(count: Int, armed: Boolean, animate: Boolean, onClick: () ->
     val fill by animateColorAsState(fillTarget, tween(200), label = "fill")
     val ink by animateColorAsState(inkTarget, tween(200), label = "ink")
     val label = if (armed) stringResource(R.string.picker_mark_all_armed, count) else stringResource(R.string.picker_mark_all)
-    Row(
+    // the pill is smaller than a finger, so the tap target around it is 48dp
+    Box(
         Modifier
-            .height(MarkAllHeight)
-            .clip(MarkAllShape)
-            .background(if (animate) fill else fillTarget)
+            .heightIn(min = TapTarget)
+            .widthIn(min = TapTarget)
             .semantics { role = Role.Button; contentDescription = label }
             .clickable(onClick = onClick)
-            .testTag("mark_all")
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .testTag("mark_all"),
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_done_all),
-            contentDescription = null,
-            tint = if (animate) ink else inkTarget,
-            modifier = Modifier.size(20.dp),
-        )
-        if (armed) {
-            Spacer(Modifier.width(6.dp))
-            Text(
-                stringResource(R.string.list_mark_all_armed, count),
-                style = ArmedStyle,
-                color = if (animate) ink else inkTarget,
-                maxLines = 1,
+        Row(
+            Modifier
+                .height(MarkAllHeight)
+                .clip(MarkAllShape)
+                .background(if (animate) fill else fillTarget)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_done_all),
+                contentDescription = null,
+                tint = if (animate) ink else inkTarget,
+                modifier = Modifier.size(20.dp),
             )
+            if (armed) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    stringResource(R.string.list_mark_all_armed, count),
+                    style = ArmedStyle,
+                    color = if (animate) ink else inkTarget,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

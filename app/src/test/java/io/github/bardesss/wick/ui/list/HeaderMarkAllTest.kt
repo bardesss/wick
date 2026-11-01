@@ -25,7 +25,7 @@ class HeaderMarkAllTest {
     @get:Rule
     val rule = createAndroidComposeRule<ComponentActivity>()
 
-    private fun show(count: Int, onMark: () -> Unit) {
+    private fun show(count: Int, canMark: Boolean = true, onMark: () -> Unit) {
         val arm = MarkAllArm()
         rule.setContent {
             WickTheme {
@@ -42,6 +42,7 @@ class HeaderMarkAllTest {
                     onOpenPicker = {},
                     onOpen = {},
                     onFrame = { false },
+                    canMarkAll = canMark,
                     markArmed = arm.armed,
                     onMarkAll = { if (arm.tap(count > 0)) onMark() },
                 )
@@ -61,6 +62,12 @@ class HeaderMarkAllTest {
         rule.onNodeWithTag("mark_all").performClick()
         rule.onNode(hasText("Mark 12 read")).assertDoesNotExist()
         assertEquals(1, marked)
+    }
+
+    @Test
+    fun hidden_when_the_view_cannot_be_marked() {
+        show(5, canMark = false) {}
+        rule.onNodeWithTag("mark_all").assertDoesNotExist()
     }
 
     @Test

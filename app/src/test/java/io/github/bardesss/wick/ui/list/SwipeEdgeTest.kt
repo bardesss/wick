@@ -43,29 +43,62 @@ class SwipeEdgeTest {
         RowModel("2", "Second", "https://e.x/2", "Source", null, 0),
     )
 
-    private fun dragRight(startXDp: Float, yPx: Float, tag: String? = null) {
+    private fun dragRight(startXDp: Float, yPx: Float, tag: String? = null, sign: Float = 1f) {
         val node = if (tag == null) rule.onRoot() else rule.onNodeWithTag(tag)
         node.performTouchInput {
             val x = startXDp.dp.toPx()
             down(Offset(x, yPx))
-            repeat(10) { moveBy(Offset(30.dp.toPx(), 0f)) }
+            repeat(10) { moveBy(Offset(sign * 30.dp.toPx(), 0f)) }
             up()
         }
         rule.waitForIdle()
     }
 
-    @Test
-    fun a_row_ignores_a_drag_from_the_left_edge_but_not_from_the_middle() {
-        val outcomes = mutableListOf<SwipeOutcome>()
+    private fun showRow(outcomes: MutableList<SwipeOutcome>, insetPx: Int? = null) {
         rule.setContent {
             WickTheme {
                 Box(Modifier.fillMaxWidth().height(80.dp).testTag("row")) {
-                    SwipeRow("1", remember { SwipeLock() }, reducedMotion = true, onThreshold = {}, onSwipe = { outcomes += it }) {
+                    val lock = remember { SwipeLock() }
+                    val inset = insetPx ?: 0
+                    SwipeRow("1", lock, reducedMotion = true, onThreshold = {}, onSwipe = { outcomes += it }, gestureInsetPx = inset) {
                         Box(it.fillMaxSize())
                     }
                 }
             }
         }
+    }
+
+    @Test
+    fun a_leftward_swipe_from_the_left_edge_still_toggles() {
+        val outcomes = mutableListOf<SwipeOutcome>()
+        // a wide inset makes the zone 174dp, so there is room to travel left from inside it
+        showRow(outcomes, insetPx = 450)
+
+        dragRight(170f, 40f, "row", sign = -1f)
+        assertEquals(listOf(SwipeOutcome.ToggleRead), outcomes)
+        outcomes.clear()
+
+        dragRight(170f, 40f, "row")
+        assertEquals(emptyList<SwipeOutcome>(), outcomes)
+    }
+
+    @Test
+    fun the_edge_zone_grows_with_the_system_gesture_inset() {
+        val outcomes = mutableListOf<SwipeOutcome>()
+        // 60px of back gesture at 3px per dp: the zone is 20dp + 24dp = 44dp wide
+        showRow(outcomes, insetPx = 60)
+
+        dragRight(40f, 40f, "row")
+        assertEquals(emptyList<SwipeOutcome>(), outcomes)
+
+        dragRight(60f, 40f, "row")
+        assertEquals(listOf(SwipeOutcome.OpenSheet), outcomes)
+    }
+
+    @Test
+    fun a_row_ignores_a_drag_from_the_left_edge_but_not_from_the_middle() {
+        val outcomes = mutableListOf<SwipeOutcome>()
+        showRow(outcomes)
 
         dragRight(8f, 40f, "row")
         assertEquals(emptyList<SwipeOutcome>(), outcomes)
