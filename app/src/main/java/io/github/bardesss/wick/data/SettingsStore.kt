@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import io.github.bardesss.wick.api.LEGACY_API_PATH
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +42,22 @@ class SettingsStore(private val store: DataStore<Preferences>) {
 
     suspend fun setHaptics(value: Boolean) {
         store.edit { it[hapticsKey] = value }
+    }
+
+    private val collapsedKey = stringSetPreferencesKey("collapsed_folders")
+
+    /** Names of the drawer folders whose feeds are folded away. */
+    val collapsedFolders: Flow<Set<String>> = store.data.map { it[collapsedKey] ?: emptySet() }
+
+    suspend fun toggleCollapsed(folder: String) {
+        store.edit {
+            val now = it[collapsedKey] ?: emptySet()
+            it[collapsedKey] = if (folder in now) now - folder else now + folder
+        }
+    }
+
+    suspend fun clearCollapsed() {
+        store.edit { it.remove(collapsedKey) }
     }
 
     private val accountKey = stringPreferencesKey("account")

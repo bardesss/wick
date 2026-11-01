@@ -65,6 +65,27 @@ class PickerModelTest {
     }
 
     @Test
+    fun collapsed_folders_keep_their_row_and_lose_their_feeds() {
+        val entries = buildPicker(feeds, mapOf("feed/2" to 3, StreamId.Folder("Tech").raw to 3))
+
+        val folded = foldPicker(entries, setOf("Tech"))
+
+        assertTrue(PickerEntry.Folder("Tech", 3, collapsed = true) in folded)
+        assertTrue(folded.filterIsInstance<PickerEntry.Feed>().none { it.id == "feed/2" || it.id == "feed/3" })
+        // other folders and the loose feeds stay
+        assertTrue(folded.any { it is PickerEntry.Feed && it.id == "feed/4" })
+        assertTrue(folded.any { it is PickerEntry.Feed && it.id == "feed/1" && !it.indented })
+        assertEquals(entries.size - 2, folded.size)
+    }
+
+    @Test
+    fun nothing_collapsed_leaves_the_list_alone() {
+        val entries = buildPicker(feeds, emptyMap())
+
+        assertEquals(entries, foldPicker(entries, emptySet()))
+    }
+
+    @Test
     fun tap_arms_first_and_marks_on_the_second() {
         val arm = MarkAllArm()
         assertFalse(arm.tap(canMark = true))

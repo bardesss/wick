@@ -464,6 +464,22 @@ class ListViewModelTest {
     }
 
     @Test
+    fun a_folded_folder_loses_its_feeds_in_the_picker_and_stays_folded() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.picker) { it.size > 1 }
+
+        vm.toggleFolder("News")
+        runCurrent()
+        val folded = settle(vm.picker) { list -> list.none { it is PickerEntry.Feed } }
+
+        assertEquals(PickerEntry.Folder("News", 2, collapsed = true), folded[1])
+        assertEquals(setOf("News"), settings.collapsedFolders.first())
+    }
+
+    @Test
     fun mark_all_with_nothing_loaded_does_nothing() = runTest(main, timeout = 30.seconds) {
         engine()
         val vm = vm()

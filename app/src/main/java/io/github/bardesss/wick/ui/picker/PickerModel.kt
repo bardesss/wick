@@ -12,7 +12,7 @@ sealed interface PickerEntry {
 
     data class All(override val count: Int) : PickerEntry
 
-    data class Folder(val name: String, override val count: Int) : PickerEntry
+    data class Folder(val name: String, override val count: Int, val collapsed: Boolean = false) : PickerEntry
 
     data class Feed(
         val id: String,
@@ -42,6 +42,24 @@ fun buildPicker(feeds: List<FeedEntity>, counts: Map<String, Int>): List<PickerE
     }
     for (f in grouped[null].orEmpty().sortedWith(byTitle)) {
         result += PickerEntry.Feed(f.id, f.title, f.iconUrl, counts[f.id] ?: 0, indented = false)
+    }
+    return result
+}
+
+/** Marks the folders in [collapsed] and leaves out their feeds. */
+fun foldPicker(entries: List<PickerEntry>, collapsed: Set<String>): List<PickerEntry> {
+    if (collapsed.isEmpty()) return entries
+    val result = ArrayList<PickerEntry>(entries.size)
+    var folded = false
+    for (e in entries) {
+        when {
+            e is PickerEntry.Folder -> {
+                folded = e.name in collapsed
+                result += if (folded) e.copy(collapsed = true) else e
+            }
+            e is PickerEntry.Feed && e.indented && folded -> Unit
+            else -> result += e
+        }
     }
     return result
 }

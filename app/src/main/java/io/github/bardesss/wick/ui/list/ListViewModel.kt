@@ -27,6 +27,7 @@ import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.ui.login.LoginMessages
 import io.github.bardesss.wick.ui.picker.PickerEntry
 import io.github.bardesss.wick.ui.picker.buildPicker
+import io.github.bardesss.wick.ui.picker.foldPicker
 import io.github.bardesss.wick.ui.resolveIcon
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -144,11 +145,16 @@ class ListViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** The drawer list with the icons resolved against the server. */
-    val picker: StateFlow<List<PickerEntry>> = combine(feedDao.all(), sync.displayedCounts()) { feeds, counts ->
+    val picker: StateFlow<List<PickerEntry>> = combine(
+        feedDao.all(),
+        sync.displayedCounts(),
+        settings.collapsedFolders,
+    ) { feeds, counts, collapsed ->
         val server = creds.auth()?.server.orEmpty()
-        buildPicker(feeds, counts).map { e ->
+        val entries = buildPicker(feeds, counts).map { e ->
             if (e is PickerEntry.Feed) e.copy(iconUrl = resolveIcon(server, e.iconUrl)) else e
         }
+        foldPicker(entries, collapsed)
     }
         .flowOn(work)
         .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(PickerEntry.All(0)))
@@ -192,6 +198,11 @@ class ListViewModel(
     }
 
     fun refresh() = startRefresh(indicator = true)
+
+    /** Folds or unfolds a drawer folder; it stays that way across starts. */
+    fun toggleFolder(name: String) {
+        appScope.launch { settings.toggleCollapsed(name) }
+    }
 
     fun select(view: StreamId) {
         if (view == _view.value) {

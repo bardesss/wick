@@ -195,6 +195,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         markEnabled = canMarkAll,
         armed = arm.armed,
         animate = !reducedMotion,
+        onToggleFolder = vm::toggleFolder,
         onSelect = { v ->
             // a view switch must not leave an armed mark all to confirm against the new view
             arm.disarm()

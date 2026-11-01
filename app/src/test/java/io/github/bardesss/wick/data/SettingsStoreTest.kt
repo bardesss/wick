@@ -22,6 +22,23 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun folder_folding_toggles_and_persists() = runBlocking {
+        val ds = MemoryPreferences()
+        val s = SettingsStore(ds)
+        assertEquals(emptySet<String>(), s.collapsedFolders.first())
+
+        s.toggleCollapsed("Tech")
+        s.toggleCollapsed("Food")
+        assertEquals(setOf("Tech", "Food"), SettingsStore(ds).collapsedFolders.first())
+
+        s.toggleCollapsed("Tech")
+        assertEquals(setOf("Food"), SettingsStore(ds).collapsedFolders.first())
+
+        s.clearCollapsed()
+        assertEquals(emptySet<String>(), s.collapsedFolders.first())
+    }
+
+    @Test
     fun v010_account_gets_the_api_path_once() = runBlocking {
         val ds = MemoryPreferences()
         ds.edit { it[stringPreferencesKey("account")] = "https://feeds.example.com\nme" }

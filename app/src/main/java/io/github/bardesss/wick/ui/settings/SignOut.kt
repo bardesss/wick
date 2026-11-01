@@ -31,8 +31,9 @@ suspend fun wipeAccount(
             db.clearAllTables()
             clearImages()
         }
-        // the next account must not open on this one's folder or feed
+        // the next account must not open on this one's folder or feed, or find its folders folded
         settings.setLastView(null)
+        settings.clearCollapsed()
         // sync must not find credentials once it can run again
         beforeRelease()
     }
