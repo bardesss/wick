@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.ui.Favicon
+import io.github.bardesss.wick.ui.Wordmark
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.Newsreader
 import io.github.bardesss.wick.ui.theme.TapTarget
@@ -61,6 +62,8 @@ import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
 
 private const val DRAWER_WIDTH = 0.84f
+// a little smaller than "All unread" under it, so it does not compete
+private val WordmarkSize = 26.sp
 private val IdleBorder = Color(0xFF3A3226)
 private val ButtonShape = RoundedCornerShape(14.dp)
 private val ChevronGutter = 32.dp
@@ -131,7 +134,11 @@ private fun DrawerBody(
     onToggleFolder: (String) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(top = 28.dp, bottom = 8.dp)) {
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(top = 24.dp, bottom = 8.dp)) {
+            // the mark scrolls away with a long list, so it never takes room from the feeds
+            item(key = "wordmark", contentType = "wordmark") {
+                Wordmark(Modifier.padding(start = 22.dp, bottom = 14.dp), size = WordmarkSize)
+            }
             items(entries, key = { it.key() }, contentType = { it::class }) { entry ->
                 // the feeds of a folder slide in and out, unless motion is reduced
                 val move = if (animate) Modifier.animateItem() else Modifier
