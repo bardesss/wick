@@ -409,7 +409,7 @@ private fun Header(name: String, count: Int, animate: Boolean, markArmed: Boolea
         Modifier
             .fillMaxWidth()
             .testTag("header")
-            .clickable(interactionSource = null, indication = null, onClickLabel = chooseView, onClick = onClick)
+            .clickable(interactionSource = null, indication = null, onClickLabel = chooseView, role = Role.Button, onClick = onClick)
             .statusBarsPadding()
             .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

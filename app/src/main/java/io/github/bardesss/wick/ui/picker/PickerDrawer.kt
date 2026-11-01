@@ -72,8 +72,8 @@ suspend fun DrawerState.show(open: Boolean, animate: Boolean) {
 }
 
 /**
- * The view picker as a left drawer over [content]. Edge swipes do not open it, so they never
- * compete with row swipes; it opens from the header and a swipe or back closes it.
+ * The view picker as a left drawer over [content]. A swipe from the left edge opens it, where
+ * rows leave the drag alone; it also opens from the header, and a swipe or back closes it.
  */
 @Composable
 fun PickerDrawer(
@@ -103,7 +103,7 @@ fun PickerDrawer(
             }
         },
         drawerState = state,
-        gesturesEnabled = state.isOpen,
+        gesturesEnabled = true,
         scrimColor = Scrim,
         content = content,
     )
