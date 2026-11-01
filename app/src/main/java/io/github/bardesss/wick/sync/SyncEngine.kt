@@ -33,7 +33,8 @@ class SyncEngine(
 ) {
     /**
      * Flushes the queue, fetches [view] and replaces the local copy. Returns the ids of the
-     * new snapshot in server order. On failure the database is left as it was.
+     * new snapshot in server order, without the items that are read here but not yet on the
+     * server. On failure the database is left as it was.
      */
     suspend fun refresh(view: StreamId, oldestFirst: Boolean): Result<List<String>> =
         queue.exclusive {
@@ -43,15 +44,18 @@ class SyncEngine(
                 return@exclusive Result.failure(e)
             }
             val ids = fetched.items.map { it.id }
-            db.withTransaction {
+            val shown = db.withTransaction {
                 store(fetched)
+                // a read mark the server has not seen yet keeps an item read, and a new list leaves it out
+                val read = db.itemDao().readAmong(ids)
                 if (fetched.complete) {
                     db.itemDao().markMissingRead(feedIdsOf(view, fetched.feeds), ids.toSet())
                 }
                 db.itemDao().clearManualUnread()
                 db.itemDao().pruneReadNotIn(ids.toSet())
+                ids.filterNot { it in read }
             }
-            Result.success(ids)
+            Result.success(shown)
         }
 
     /** Like [refresh] for the whole account, but it only adds and updates rows. */

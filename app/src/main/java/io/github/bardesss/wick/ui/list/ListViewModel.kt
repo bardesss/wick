@@ -319,6 +319,8 @@ class ListViewModel(
                     again = false
                     val v = _view.value
                     val result = try {
+                        // marks made just before, say right before a view switch, must be in Room first
+                        queue.awaitApplied()
                         sync.refresh(v, settings.oldestFirst.first())
                     } catch (e: CancellationException) {
                         throw e

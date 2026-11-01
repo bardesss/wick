@@ -75,9 +75,29 @@ class SyncEngineTest {
 
         val ids = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
 
-        assertEquals(listOf("b", "a"), ids)
+        // a is read here, so the new list leaves it out, but the row stays for the queue
+        assertEquals(listOf("b"), ids)
         assertTrue(row("a")!!.read)
         assertEquals(1, db.queueDao().pending().size)
+    }
+
+    @Test
+    fun a_new_list_leaves_out_items_read_here_that_the_server_still_has_unread() = runTest {
+        api.addItem("a", "feed/1", 100)
+        api.addItem("b", "feed/1", 200)
+        api.addItem("c", "feed/2", 300)
+        val engine = engine()
+        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        db.itemDao().setRead("b", read = true, manualUnread = false)
+        db.queueDao().enqueue(PendingMarkEntity("b", read = true, queuedAt = 1))
+        // the mark is stuck: the server keeps answering 500 to edit-tag
+        api.failNext(1, ApiError.Http(500))
+
+        val ids = engine.refresh(StreamId.Folder("News"), oldestFirst = false).getOrThrow()
+
+        assertEquals(listOf("c", "a"), ids)
+        assertTrue(row("b")!!.read)
+        assertEquals(listOf("b"), db.queueDao().pending().map { it.itemId })
     }
 
     @Test

@@ -32,6 +32,9 @@ abstract class ItemDao {
     @Query("SELECT itemId FROM PendingMarkEntity WHERE itemId IN (:ids)")
     protected abstract suspend fun pendingAmong(ids: List<String>): List<String>
 
+    @Query("SELECT id FROM ItemEntity WHERE read = 1 AND id IN (:ids)")
+    protected abstract suspend fun readChunk(ids: List<String>): List<String>
+
     @Query("SELECT * FROM PendingMarkAllEntity")
     protected abstract suspend fun pendingMarkAlls(): List<PendingMarkAllEntity>
 
@@ -98,6 +101,9 @@ abstract class ItemDao {
 
     @Query("SELECT html FROM ItemEntity WHERE id = :id")
     abstract suspend fun htmlOf(id: String): String?
+
+    /** Which of [ids] are read locally. */
+    suspend fun readAmong(ids: List<String>): Set<String> = ids.chunked(CHUNK).flatMapTo(HashSet()) { readChunk(it) }
 
     suspend fun feedIdsOf(ids: List<String>): Map<String, String> =
         ids.chunked(CHUNK).flatMap { feedIdsChunk(it) }.associate { it.id to it.feedId }
