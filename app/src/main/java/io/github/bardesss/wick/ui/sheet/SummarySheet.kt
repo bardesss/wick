@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import io.github.bardesss.wick.R
+import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.format.formatAge
 import io.github.bardesss.wick.ui.Favicon
 import io.github.bardesss.wick.ui.list.RowModel
@@ -78,6 +79,7 @@ fun SummarySheet(
     row: RowModel,
     body: SheetBody,
     nowSec: Long,
+    linkTarget: LinkTarget,
     sheetState: SheetState,
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
@@ -94,19 +96,19 @@ fun SummarySheet(
     ) {
         // the sheet is its own window, so it needs its own resource id switch
         Box(Modifier.semantics { testTagsAsResourceId = true }.testTag("sheet")) {
-            SheetContent(row, body, nowSec, onOpen)
+            SheetContent(row, body, nowSec, linkTarget, onOpen)
         }
     }
 }
 
 @Composable
-private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, onOpen: () -> Unit) {
+private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, linkTarget: LinkTarget, onOpen: () -> Unit) {
     val context = LocalContext.current
     val maxHeight = with(LocalDensity.current) { (LocalWindowInfo.current.containerSize.height * MAX_HEIGHT).toDp() }
     // links in the text open the same way as the list does
-    val links = remember(context) {
+    val links = remember(context, linkTarget) {
         object : UriHandler {
-            override fun openUri(uri: String) = openLink(context, uri)
+            override fun openUri(uri: String) = openLink(context, uri, linkTarget)
         }
     }
     // the cap sits on the content; a height limit on the sheet itself throws off its anchors
@@ -161,7 +163,7 @@ private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, onOpen: (
                 .fillMaxWidth()
                 .padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 26.dp),
         ) {
-            Text(stringResource(R.string.sheet_open_browser), style = ButtonStyle)
+            Text(stringResource(R.string.sheet_open), style = ButtonStyle)
         }
     }
 }

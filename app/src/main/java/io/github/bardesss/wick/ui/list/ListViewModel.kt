@@ -13,6 +13,7 @@ import io.github.bardesss.wick.AppContainer
 import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.data.CredentialStore
+import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.FeedDao
 import io.github.bardesss.wick.db.FeedEntity
@@ -262,6 +263,9 @@ class ListViewModel(
 
     /** Whether ticks are on; the screen follows it in its [io.github.bardesss.wick.ui.Haptics]. */
     val haptics: Flow<Boolean> get() = settings.haptics
+
+    /** Where links open. */
+    val linkTarget: Flow<LinkTarget> get() = settings.linkTarget
 
     /** The feed's text for the sheet, read and converted off the main thread. Null when it sent none. */
     suspend fun sheetText(id: String): AnnotatedString? = withContext(work) { htmlToAnnotated(itemDao.htmlOf(id)) }

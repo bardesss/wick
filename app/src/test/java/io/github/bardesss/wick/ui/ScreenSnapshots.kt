@@ -35,6 +35,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.platform.LocalDensity
 import io.github.bardesss.wick.html.htmlToAnnotated
 import io.github.bardesss.wick.api.StreamId
+import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.picker.MarkAllArm
 import io.github.bardesss.wick.ui.picker.PickerDrawer
 import io.github.bardesss.wick.ui.picker.PickerEntry
@@ -220,6 +221,7 @@ class ScreenSnapshots {
             row = sample[4],
             body = SheetBody.Ready(htmlToAnnotated(html)),
             nowSec = now,
+            linkTarget = LinkTarget.InApp,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             onOpen = {},
             onDismiss = {},
@@ -309,9 +311,11 @@ class ScreenSnapshots {
         SettingsScreen(
             oldestFirst = false,
             haptics = true,
+            linkTarget = LinkTarget.InApp,
             server = "https://feeds.example.com",
             onOldestFirst = {},
             onHaptics = {},
+            onLinkTarget = {},
             onSignOut = {},
             version = "0.1.0",
         )

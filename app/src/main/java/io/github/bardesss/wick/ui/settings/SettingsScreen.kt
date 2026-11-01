@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.bardesss.wick.BuildConfig
 import io.github.bardesss.wick.R
+import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.Wordmark
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.WickColors
@@ -44,9 +45,11 @@ private val IdleChoice = Color(0xFFB7BEC6)
 fun SettingsScreen(
     oldestFirst: Boolean?,
     haptics: Boolean?,
+    linkTarget: LinkTarget?,
     server: String,
     onOldestFirst: (Boolean) -> Unit,
     onHaptics: (Boolean) -> Unit,
+    onLinkTarget: (LinkTarget) -> Unit,
     onSignOut: () -> Unit,
     version: String = BuildConfig.VERSION_NAME,
 ) {
@@ -74,6 +77,14 @@ fun SettingsScreen(
             Section(stringResource(R.string.settings_haptics)) {
                 Choice(stringResource(R.string.settings_on), haptics == true) { onHaptics(true) }
                 Choice(stringResource(R.string.settings_off), haptics == false) { onHaptics(false) }
+            }
+            Section(stringResource(R.string.settings_links)) {
+                Choice(stringResource(R.string.settings_links_in_app), linkTarget == LinkTarget.InApp) {
+                    onLinkTarget(LinkTarget.InApp)
+                }
+                Choice(stringResource(R.string.settings_links_default), linkTarget == LinkTarget.DefaultApp) {
+                    onLinkTarget(LinkTarget.DefaultApp)
+                }
             }
             Section(stringResource(R.string.settings_account)) {
                 Text(server, style = NoteStyle, color = WickColors.Meta, modifier = Modifier.padding(vertical = 8.dp))

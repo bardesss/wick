@@ -73,6 +73,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
+import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.isWebUrl
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.picker.MarkAllArm
@@ -163,10 +164,11 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     var sheetId by rememberSaveable { mutableStateOf<String?>(null) }
     val sheetKept = remember { arrayOfNulls<RowModel>(1) }
 
-    val open = remember(vm, context) {
+    val linkTarget by vm.linkTarget.collectAsStateWithLifecycle(LinkTarget.InApp)
+    val open = remember(vm, context, linkTarget) {
         { row: RowModel ->
             row.url?.takeIf(::isWebUrl)?.let { url ->
-                openLink(context, url)
+                openLink(context, url, linkTarget)
                 vm.open(row.id)
             }
             Unit
@@ -243,6 +245,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
             row = sheetRow,
             body = body,
             nowSec = nowSec,
+            linkTarget = linkTarget,
             sheetState = sheetState,
             onOpen = {
                 open(sheetRow)
