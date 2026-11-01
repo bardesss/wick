@@ -54,7 +54,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -100,6 +102,7 @@ private val FlameSize = 28.dp
 private val MarkAllHeight = 32.dp
 private val MarkAllShape = RoundedCornerShape(18.dp)
 private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp)
+private val FOOTER_SLACK = 16.dp
 private const val ARM_TIMEOUT_MS = 4000L
 private const val FOOTER_KEY = 0
 
@@ -308,6 +311,26 @@ fun ListContent(
                 )
             }
             val pull = rememberPullToRefreshState()
+            val rowCount by rememberUpdatedState(rows?.size ?: -1)
+            val refreshingNow by rememberUpdatedState(refreshing)
+            val refreshNow by rememberUpdatedState(onRefresh)
+            val pullScope = rememberCoroutineScope()
+            val density = LocalDensity.current
+            val footerPull = remember(listState, pull) {
+                val slackPx = with(density) { FOOTER_SLACK.toPx() }
+                FooterPull(
+                    state = pull,
+                    scope = pullScope,
+                    thresholdPx = with(density) { PullToRefreshDefaults.PositionalThreshold.toPx() },
+                    // the footer is the first item on screen and has hardly moved up
+                    active = {
+                        listState.firstVisibleItemIndex == rowCount &&
+                            listState.firstVisibleItemScrollOffset <= slackPx
+                    },
+                    refreshing = { refreshingNow },
+                    onRefresh = { refreshNow() },
+                )
+            }
             PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = onRefresh,
@@ -326,7 +349,7 @@ fun ListContent(
                 // laying out an empty list before the rows arrive would reset a restored scroll position
                 if (rows != null) BoxWithConstraints(Modifier.fillMaxSize()) {
                     val footerHeight = maxHeight
-                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("list")) {
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(footerPull).testTag("list")) {
                         itemsIndexed(rows, key = { _, row -> row.id }, contentType = { _, _ -> "item" }) { index, row ->
                             val isRead by remember(row.id) { derivedStateOf { row.id in read.value } }
                             SwipeRow(
