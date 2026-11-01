@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalConfiguration
@@ -61,6 +63,7 @@ private val Scrim = Color(0x99040608)
 private val FeedText = Color(0xFFB7BEC6)
 private val IdleBorder = Color(0xFF3A3226)
 private val ButtonShape = RoundedCornerShape(14.dp)
+private val ChevronGutter = 32.dp
 
 private val AllStyle = TextStyle(fontFamily = Newsreader, fontWeight = FontWeight.Normal, fontSize = 20.sp)
 private val FolderStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 15.sp)
@@ -166,10 +169,14 @@ private fun EntryRow(
         entry.count == 0 -> WickColors.Faded
         else -> WickColors.Meta
     }
-    val start = if (entry is PickerEntry.Feed && entry.indented) 40.dp else 22.dp
-    val top = if (entry is PickerEntry.Folder) 10.dp else 0.dp
-    // a folder's chevron has its own tap target at the end of the row
-    val end = if (entry is PickerEntry.Folder) 0.dp else 22.dp
+    val folder = entry as? PickerEntry.Folder
+    // a folder's chevron sits in the gutter before its name, so its name lines up with the feeds under it
+    val start = when {
+        folder != null -> ChevronGutter
+        entry is PickerEntry.Feed && entry.indented -> 40.dp
+        else -> 22.dp
+    }
+    val top = if (folder != null) 10.dp else 0.dp
     Row(
         modifier
             .fillMaxWidth()
@@ -177,11 +184,12 @@ private fun EntryRow(
             .semantics { this.selected = selected },
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (folder != null) FolderChevron(folder, animate) { onToggleFolder(folder.name) }
         Row(
             Modifier
                 .weight(1f)
                 .clickable(onClick = onClick)
-                .padding(start = start, end = end, top = 11.dp, bottom = 11.dp),
+                .padding(start = if (folder != null) 8.dp else start, end = 22.dp, top = 11.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val (label, style, color) = when (entry) {
@@ -204,7 +212,6 @@ private fun EntryRow(
             Spacer(Modifier.width(12.dp))
             Text(entry.count.toString(), style = CountStyle, color = countColor)
         }
-        if (entry is PickerEntry.Folder) FolderChevron(entry, animate) { onToggleFolder(entry.name) }
     }
 }
 
@@ -213,20 +220,23 @@ private fun FolderChevron(folder: PickerEntry.Folder, animate: Boolean, onClick:
     val target = if (folder.collapsed) -90f else 0f
     val turned by animateFloatAsState(target, tween(200), label = "chevron")
     val label = stringResource(if (folder.collapsed) R.string.picker_expand else R.string.picker_collapse, folder.name)
-    Box(
-        Modifier
-            .size(48.dp)
-            .semantics { role = Role.Button; contentDescription = label }
-            .clickable(onClick = onClick)
-            .testTag("folder_chevron"),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_chevron_down),
-            contentDescription = null,
-            tint = WickColors.Meta,
-            modifier = Modifier.size(20.dp).rotate(if (animate) turned else target),
-        )
+    // the tap target is 48dp, wider than the gutter, so it reaches over the start of the name; it stays on top
+    Box(Modifier.width(ChevronGutter).zIndex(1f)) {
+        Box(
+            Modifier
+                .requiredSize(48.dp)
+                .semantics { role = Role.Button; contentDescription = label }
+                .clickable(onClick = onClick)
+                .testTag("folder_chevron"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_chevron_down),
+                contentDescription = null,
+                tint = WickColors.Meta,
+                modifier = Modifier.size(18.dp).rotate(if (animate) turned else target),
+            )
+        }
     }
 }
 

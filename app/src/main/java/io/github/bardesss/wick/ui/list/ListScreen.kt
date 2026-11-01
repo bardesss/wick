@@ -1,6 +1,13 @@
 package io.github.bardesss.wick.ui.list
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
@@ -54,6 +61,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -321,12 +329,21 @@ fun ListContent(
                 )
             }
             val pull = rememberPullToRefreshState()
-            val newCount by remember(rows) {
+            val newCount by remember(rows, count) {
                 derivedStateOf {
                     if (rows == null) 0 else newItems(count, rows.count { it.id !in read.value })
                 }
             }
-            Box(Modifier.fillMaxSize()) {
+            // the pill keeps its place while a refresh runs, so the list does not move until the new snapshot is in
+            val pillCount = remember { intArrayOf(0) }
+            if (newCount > 0) pillCount[0] = newCount
+            AnimatedVisibility(
+                visible = newCount > 0,
+                enter = if (reducedMotion) EnterTransition.None else fadeIn(tween(120)) + expandVertically(tween(160)),
+                exit = if (reducedMotion) ExitTransition.None else fadeOut(tween(120)) + shrinkVertically(tween(160)),
+            ) {
+                NewItemsPill(pillCount[0], enabled = !refreshing, onClick = onRefresh)
+            }
             PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = onRefresh,
@@ -386,8 +403,6 @@ fun ListContent(
                     }
                 }
             }
-            if (newCount > 0 && !refreshing) NewItemsPill(newCount, onRefresh, Modifier.align(Alignment.TopCenter))
-            }
         }
         SnackbarHost(
             snackbar,
@@ -408,28 +423,30 @@ fun ListContent(
     }
 }
 
-/** Says that the header counts items the list does not show; a tap refreshes. */
+/** Says that the header counts items the list does not show; a tap refreshes. Unseen and inert while that runs. */
 @Composable
-private fun NewItemsPill(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    // the pill is smaller than a finger, so the tap target around it is 48dp
-    Box(
-        modifier
-            .heightIn(min = TapTarget)
-            .widthIn(min = TapTarget)
-            .semantics { role = Role.Button }
-            .clickable(onClick = onClick)
-            .testTag("new_items"),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            pluralStringResource(R.plurals.list_new_items, count, count),
-            style = PillStyle,
-            color = WickColors.Amber,
-            maxLines = 1,
-            modifier = Modifier
-                .background(WickColors.Raised, PillShape)
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-        )
+private fun NewItemsPill(count: Int, enabled: Boolean, onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0f), contentAlignment = Alignment.Center) {
+        // the pill is smaller than a finger, so the tap target around it is 48dp
+        Box(
+            Modifier
+                .heightIn(min = TapTarget)
+                .widthIn(min = TapTarget)
+                .semantics { role = Role.Button }
+                .clickable(enabled = enabled, onClick = onClick)
+                .testTag("new_items"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                pluralStringResource(R.plurals.list_new_items, count, count),
+                style = PillStyle,
+                color = WickColors.Amber,
+                maxLines = 1,
+                modifier = Modifier
+                    .background(WickColors.Raised, PillShape)
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
+        }
     }
 }
 

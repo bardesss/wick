@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -70,9 +71,11 @@ class NewItemsTest {
     }
 
     @Test
-    fun the_pill_is_hidden_while_refreshing_and_when_nothing_is_new() {
-        show(count = 3, refreshing = true)
-        rule.onNodeWithTag("new_items").assertDoesNotExist()
+    fun the_pill_is_inert_while_refreshing() {
+        var refreshed = 0
+        show(count = 3, refreshing = true) { refreshed++ }
+        rule.onNodeWithTag("new_items").assertIsNotEnabled()
+        assertEquals(0, refreshed)
     }
 
     @Test
