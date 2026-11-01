@@ -165,14 +165,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         }
     }
 
-    // a new snapshot starts at the top; the first one keeps any restored position
-    val ids = remember(rows) { rows?.map { it.id } }
-    var shownIds by remember { mutableStateOf<List<String>?>(null) }
-    LaunchedEffect(ids) {
-        if (ids == null) return@LaunchedEffect
-        if (!shownIds.isNullOrEmpty() && shownIds != ids) listState.scrollToItem(0)
-        shownIds = ids
-    }
+    TopOnNewSnapshot(remember(rows) { rows?.map { it.id } }, listState)
 
     val haptics = rememberHaptics(vm.haptics)
     val reducedMotion by rememberReducedMotion()
@@ -289,6 +282,20 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
             },
             onDismiss = { sheetId = null },
         )
+    }
+}
+
+/**
+ * A new snapshot starts at the top; the first one keeps any restored position. An empty list
+ * counts as shown, or a view that fills in after opening empty would keep the old position.
+ */
+@Composable
+internal fun TopOnNewSnapshot(ids: List<String>?, listState: LazyListState) {
+    var shownIds by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(ids) {
+        if (ids == null) return@LaunchedEffect
+        if (shownIds != null && shownIds != ids) listState.scrollToItem(0)
+        shownIds = ids
     }
 }
 
