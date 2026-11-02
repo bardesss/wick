@@ -45,8 +45,10 @@ class NewItemsTest {
 
     @Test
     fun a_full_snapshot_has_no_room_for_more() {
-        assertEquals(0, newItems(count = 1200, unreadRowsInSnapshot = 1000, snapshotRows = MAX_ITEMS))
-        assertEquals(5, newItems(count = 1004, unreadRowsInSnapshot = 999, snapshotRows = MAX_ITEMS - 1))
+        assertEquals(0, newItems(count = 1200, unreadRowsInSnapshot = 1000, capped = true))
+        // a capped listing minus the rows read here has fewer than the limit, and is still full
+        assertEquals(0, newItems(count = 3000, unreadRowsInSnapshot = 999, capped = true))
+        assertEquals(5, newItems(count = 1004, unreadRowsInSnapshot = 999, capped = false))
     }
 
     @Test
@@ -66,7 +68,7 @@ class NewItemsTest {
     private var refreshing by mutableStateOf(false)
     private var refreshed = 0
 
-    private fun show(count: Int, rows: List<RowModel> = emptyList()) {
+    private fun show(count: Int, rows: List<RowModel> = emptyList(), capped: Boolean = false) {
         rule.mainClock.autoAdvance = false
         rule.setContent {
             WickTheme {
@@ -74,6 +76,7 @@ class NewItemsTest {
                     viewName = "All unread",
                     count = count,
                     message = null,
+                    capped = capped,
                     rows = rows,
                     read = remember { mutableStateOf(emptySet()) },
                     nowSec = 0,
@@ -140,8 +143,8 @@ class NewItemsTest {
 
     @Test
     fun a_full_snapshot_gets_no_pill() {
-        val rows = List(MAX_ITEMS) { RowModel("id$it", "T $it", null, "S", null, 0) }
-        show(count = MAX_ITEMS + 5, rows = rows)
+        val rows = List(MAX_ITEMS - 1) { RowModel("id$it", "T $it", null, "S", null, 0) }
+        show(count = MAX_ITEMS + 5, rows = rows, capped = true)
 
         advance(PILL_DELAY_MS * 3)
 

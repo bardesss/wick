@@ -157,7 +157,7 @@ class MarkQueue(
         return clean && queueDao.pending().isEmpty() && queueDao.pendingAll().isEmpty()
     }
 
-    private fun ApiError.stopsFlush() = this == ApiError.Unreachable || this == ApiError.BadCredentials
+    private fun ApiError.stopsFlush() = this == ApiError.Unreachable || this == ApiError.BadCredentials || this == ApiError.Forbidden
 
     private fun nextStamp(): Long {
         lastStamp = maxOf(clock(), lastStamp + 1)

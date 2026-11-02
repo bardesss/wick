@@ -87,7 +87,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
-import io.github.bardesss.wick.sync.MAX_ITEMS
 import io.github.bardesss.wick.ui.isWebUrl
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.picker.MarkAllArm
@@ -128,12 +127,11 @@ private const val FOOTER_KEY = 0
 
 /**
  * How many unread items the header counts that the list does not show. Background sync moves the
- * count; the list only changes on a refresh. A full snapshot ([snapshotRows] at the limit) cannot
- * take more, and a refresh that did not close the gap leaves the count it ended on in
+ * count; the list only changes on a refresh. A [capped] snapshot cannot take more, and a refresh that did not close the gap leaves the count it ended on in
  * [suppressedAt] until the count moves again; neither is worth offering a refresh for.
  */
-fun newItems(count: Int, unreadRowsInSnapshot: Int, snapshotRows: Int = 0, suppressedAt: Int? = null): Int = when {
-    snapshotRows >= MAX_ITEMS || count == suppressedAt -> 0
+fun newItems(count: Int, unreadRowsInSnapshot: Int, capped: Boolean = false, suppressedAt: Int? = null): Int = when {
+    capped || count == suppressedAt -> 0
     else -> (count - unreadRowsInSnapshot).coerceAtLeast(0)
 }
 
@@ -150,6 +148,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     val name by vm.viewName.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val capped by vm.capped.collectAsStateWithLifecycle()
     val view by vm.view.collectAsStateWithLifecycle()
     val picker by vm.picker.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -234,6 +233,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         viewName = name ?: stringResource(R.string.list_all_unread),
         count = count,
         message = message?.resolve(),
+        capped = capped,
         rows = rows,
         read = read,
         nowSec = nowSec,
@@ -307,6 +307,8 @@ fun ListContent(
     viewName: String,
     count: Int,
     message: String?,
+    /** True when the list was cut at the item limit, so the server holds more than it shows. */
+    capped: Boolean = false,
     /** Null until the stored list has been read; nothing is laid out until then. */
     rows: List<RowModel>?,
     read: State<Set<String>>,
@@ -353,9 +355,9 @@ fun ListContent(
                 )
             }
             val pull = rememberPullToRefreshState()
-            val gap by remember(rows, count) {
+            val gap by remember(rows, count, capped) {
                 derivedStateOf {
-                    if (rows == null) 0 else newItems(count, rows.count { it.id !in read.value }, rows.size)
+                    if (rows == null) 0 else newItems(count, rows.count { it.id !in read.value }, capped)
                 }
             }
             val gapNow by rememberUpdatedState(gap)

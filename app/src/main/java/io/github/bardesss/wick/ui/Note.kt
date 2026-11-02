@@ -16,6 +16,7 @@ fun ApiError.note(): Note = when (this) {
     ApiError.Unreachable -> Note(R.string.error_unreachable)
     ApiError.Cleartext -> Note(R.string.error_needs_https)
     ApiError.BadCredentials -> Note(R.string.error_bad_credentials)
+    ApiError.Forbidden -> Note(R.string.error_forbidden)
     ApiError.NoGReaderApi -> Note(R.string.error_no_api)
     ApiError.Malformed -> Note(R.string.error_malformed)
     is ApiError.Http -> Note(R.string.error_http, code)

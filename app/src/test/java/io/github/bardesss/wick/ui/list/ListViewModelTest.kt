@@ -14,6 +14,7 @@ import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.CountEntity
 import io.github.bardesss.wick.db.FeedEntity
 import io.github.bardesss.wick.db.ItemEntity
+import io.github.bardesss.wick.db.PendingMarkAllEntity
 import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.FakeReaderApi
 import io.github.bardesss.wick.sync.MarkQueue
@@ -258,6 +259,37 @@ class ListViewModelTest {
 
         settle(creds.authFlow) { it == null }
         assertNull(creds.auth())
+    }
+
+    @Test
+    fun forbidden_keeps_the_sign_in_and_says_so() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+
+        api.failNext(1, ApiError.Forbidden)
+        vm.refresh()
+
+        assertEquals(Note(R.string.error_forbidden), settle(vm.message) { it != null })
+        assertEquals("tok", creds.auth()?.token)
+    }
+
+    @Test
+    fun a_stuck_mark_all_leaves_a_note_after_a_successful_refresh() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+
+        db.queueDao().enqueueAll(PendingMarkAllEntity(streamRaw = StreamId.All.raw, olderThanUsec = 1_000_000))
+        api.failNext(1, ApiError.Http(500))
+        vm.refresh()
+        assertEquals(Note(R.string.note_marks_unsent), settle(vm.message) { it != null })
+
+        // the server takes it on the next try, and the note goes
+        vm.refresh()
+        assertNull(settle(vm.message) { it == null })
     }
 
     @Test

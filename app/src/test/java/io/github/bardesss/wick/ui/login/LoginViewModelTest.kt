@@ -91,6 +91,11 @@ class LoginViewModelTest {
     }
 
     @Test
+    fun maps_forbidden_to_its_own_message() {
+        assertEquals(Note(R.string.error_forbidden), failWith(ApiError.Forbidden))
+    }
+
+    @Test
     fun maps_http_code() {
         assertEquals(Note(R.string.error_http, 502), failWith(ApiError.Http(502)))
     }
