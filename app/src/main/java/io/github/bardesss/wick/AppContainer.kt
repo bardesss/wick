@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.room.Room
 import androidx.room.withTransaction
 import coil3.ImageLoader
+import coil3.svg.SvgDecoder
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -69,7 +70,13 @@ class AppContainer(val context: Context) {
     val syncEngine: SyncEngine by lazy { SyncEngine(api, db, markQueue) }
 
     val accountSwitch: AccountSwitch by lazy {
-        AccountSwitch(settings) { wipeAccount(markQueue, db, settings, clearImages = ::clearImages) }
+        AccountSwitch(
+            settings,
+            hasData = {
+                feedDao.feedsNow().isNotEmpty() || itemDao.any() ||
+                    queueDao.pending().isNotEmpty() || queueDao.pendingAll().isNotEmpty()
+            },
+        ) { wipeAccount(markQueue, db, settings, clearImages = ::clearImages) }
     }
 
     /** The view shown last time, read for each session so the first frame can have the right header. */
@@ -98,7 +105,11 @@ private const val IMAGE_USER_AGENT = "Mozilla/5.0 (Android) Wick"
 /** Coil loader for favicons and lead images. Memory and disk caches are keyed by the plain image URL. */
 fun buildImageLoader(context: Context, client: OkHttpClient, diskDir: File): ImageLoader =
     ImageLoader.Builder(context)
-        .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }
+        .components {
+            add(OkHttpNetworkFetcherFactory(callFactory = { client }))
+            // plenty of sites ship only an svg icon, and the server passes it on as it is
+            add(SvgDecoder.Factory())
+        }
         .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.05).build() }
         .diskCache {
             DiskCache.Builder()

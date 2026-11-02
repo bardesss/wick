@@ -57,7 +57,7 @@ class SyncEngineTest {
         db.itemDao().upsertKeepingLocal(listOf(local("a", "feed/1", 100, read = true)))
         val engine = engine()
 
-        val ids = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        val ids = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids
 
         assertEquals(listOf("a"), ids)
         assertFalse(row("a")!!.read)
@@ -73,7 +73,7 @@ class SyncEngineTest {
         // the flush cannot reach the server, so the mark stays pending
         api.failNext(1)
 
-        val ids = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        val ids = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids
 
         // a is read here, so the new list leaves it out, but the row stays for the queue
         assertEquals(listOf("b"), ids)
@@ -87,13 +87,13 @@ class SyncEngineTest {
         api.addItem("b", "feed/1", 200)
         api.addItem("c", "feed/2", 300)
         val engine = engine()
-        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids
         db.itemDao().setRead("b", read = true, manualUnread = false)
         db.queueDao().enqueue(PendingMarkEntity("b", read = true, queuedAt = 1))
         // the mark is stuck: the server keeps answering 500 to edit-tag
         api.failNext(1, ApiError.Http(500))
 
-        val ids = engine.refresh(StreamId.Folder("News"), oldestFirst = false).getOrThrow()
+        val ids = engine.refresh(StreamId.Folder("News"), oldestFirst = false).getOrThrow().ids
 
         assertEquals(listOf("c", "a"), ids)
         assertTrue(row("b")!!.read)
@@ -107,9 +107,9 @@ class SyncEngineTest {
         api.addItem("c", "feed/3", 200)
         val engine = engine()
 
-        assertEquals(listOf("b", "c", "a"), engine.refresh(StreamId.All, oldestFirst = false).getOrThrow())
-        assertEquals(listOf("a", "c", "b"), engine.refresh(StreamId.All, oldestFirst = true).getOrThrow())
-        assertEquals(listOf("b", "a"), engine.refresh(StreamId.Folder("News"), oldestFirst = false).getOrThrow())
+        assertEquals(listOf("b", "c", "a"), engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids)
+        assertEquals(listOf("a", "c", "b"), engine.refresh(StreamId.All, oldestFirst = true).getOrThrow().ids)
+        assertEquals(listOf("b", "a"), engine.refresh(StreamId.Folder("News"), oldestFirst = false).getOrThrow().ids)
     }
 
     @Test
@@ -120,7 +120,7 @@ class SyncEngineTest {
         api.addItem("d", "feed/3", 130)
         api.addItem("e", "feed/3", 140, read = true)
         val engine = engine()
-        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids
 
         // read a (feed/1), unread e (feed/3)
         db.itemDao().setRead("a", read = true, manualUnread = false)
@@ -153,7 +153,7 @@ class SyncEngineTest {
         api.addItem("e", "feed/3", 140, read = true)
         val q = db.newQueue(api, backgroundScope)
         val engine = SyncEngine(api, db, q)
-        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids
 
         q.mark("a", read = true, manual = false)
         q.mark("d", read = true, manual = false)
@@ -167,7 +167,7 @@ class SyncEngineTest {
         assertEquals(1, db.feedDao().counts().first()["feed/1"])
 
         // the server agrees with the adjusted counts
-        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids
         assertEquals(before, engine.displayedCounts().first())
 
         q.markAll(StreamId.Folder("News"), listOf("feed/1", "feed/2"), newestLoadedSec = 1_000)
@@ -186,7 +186,7 @@ class SyncEngineTest {
         api.addItem("b", "feed/1", 110)
         val q = db.newQueue(api, backgroundScope)
         val engine = SyncEngine(api, db, q)
-        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids
 
         val gate = CompletableDeferred<Unit>()
         api.beforeUnread = { gate.await() }
@@ -227,7 +227,7 @@ class SyncEngineTest {
         val engine = engine()
         api.failNext(1)
 
-        val ids = engine.refresh(StreamId.Folder("News"), oldestFirst = false).getOrThrow()
+        val ids = engine.refresh(StreamId.Folder("News"), oldestFirst = false).getOrThrow().ids
 
         assertEquals(listOf("kept"), ids)
         assertTrue(row("gone") == null)
@@ -235,6 +235,36 @@ class SyncEngineTest {
         assertFalse(row("pend")!!.read)
         // feed/3 is outside the refreshed view
         assertFalse(row("other")!!.read)
+    }
+
+    @Test
+    fun refresh_says_when_the_item_cap_cut_the_listing_short() = runTest {
+        repeat(MAX_ITEMS) { api.addItem("i$it", "feed/1", it.toLong()) }
+        val engine = engine()
+
+        val full = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        api.addItem("extra", "feed/1", 5_000)
+        val capped = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+
+        assertEquals(MAX_ITEMS, full.ids.size)
+        assertFalse(full.capped)
+        assertEquals(MAX_ITEMS, capped.ids.size)
+        assertTrue(capped.capped)
+    }
+
+    @Test
+    fun refresh_says_when_a_mark_all_stays_queued() = runTest {
+        api.addItem("a", "feed/1", 100)
+        db.queueDao().enqueueAll(PendingMarkAllEntity(streamRaw = StreamId.All.raw, olderThanUsec = 1_000_000))
+        val engine = engine()
+        // the server answers 500 to the mark-all, so it stays queued
+        api.failNext(1, ApiError.Http(500))
+
+        val stuck = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+        val sent = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+
+        assertTrue(stuck.marksStuck)
+        assertFalse(sent.marksStuck)
     }
 
     @Test

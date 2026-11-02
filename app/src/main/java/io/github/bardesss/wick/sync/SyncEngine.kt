@@ -27,18 +27,26 @@ private class Fetched(
     val complete: Boolean,
 )
 
+/**
+ * What a refresh brought back. [ids] are the new snapshot in server order. [capped] is true when
+ * the item cap cut the listing short, so the server holds more than the snapshot. [marksStuck]
+ * is true when a mark-all is still queued after the flush that came first.
+ */
+class Refreshed(val ids: List<String>, val capped: Boolean, val marksStuck: Boolean)
+
 class SyncEngine(
     private val api: ReaderApi,
     private val db: WickDb,
     private val queue: MarkQueue,
 ) {
     /**
-     * Flushes the queue, fetches [view] and replaces the local copy. Returns the ids of the
-     * new snapshot in server order, without the items that are read here but not yet on the
-     * server. On failure the database is left as it was.
+     * Flushes the queue, fetches [view] and replaces the local copy. The ids of the new
+     * snapshot leave out the items that are read here but not yet on the server. On failure
+     * the database is left as it was.
      */
-    suspend fun refresh(view: StreamId, oldestFirst: Boolean): Result<List<String>> =
+    suspend fun refresh(view: StreamId, oldestFirst: Boolean): Result<Refreshed> =
         queue.exclusive {
+            val marksStuck = db.queueDao().pendingAll().isNotEmpty()
             val fetched = try {
                 fetch(view, oldestFirst)
             } catch (e: ApiError) {
@@ -56,7 +64,7 @@ class SyncEngine(
                 db.itemDao().pruneReadNotIn(ids.toSet())
                 ids.filterNot { it in read }
             }
-            Result.success(shown)
+            Result.success(Refreshed(shown, capped = !fetched.complete, marksStuck = marksStuck))
         }
 
     /** Like [refresh] for the whole account, but it only adds and updates rows. */

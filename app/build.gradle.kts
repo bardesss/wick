@@ -116,6 +116,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.coil.svg)
     implementation(libs.androidx.browser)
     implementation(libs.jsoup)
     implementation(libs.androidx.work.runtime.ktx)

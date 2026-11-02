@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.bardesss.wick.AppContainer
 import io.github.bardesss.wick.LOG_TAG
+import io.github.bardesss.wick.R
 import io.github.bardesss.wick.api.ApiError
 import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.api.feedIds
@@ -96,6 +97,7 @@ class ListViewModel(
 
     private val tracker = SeenTracker()
     private var lastFrameIndex = HashMap<String, Int>()
+    private var lastShown: Any? = null
     private var busy = false
     private var again = false
     private var applying = false
@@ -164,6 +166,11 @@ class ListViewModel(
     /** True while the pull indicator should show. */
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+    private val _capped = MutableStateFlow(false)
+
+    /** True when the last refresh of this view left items on the server out of the list. */
+    val capped: StateFlow<Boolean> = _capped.asStateFlow()
+
     private val _message = MutableStateFlow<Note?>(null)
 
     /** A quiet note under the header after a refresh failed. */
@@ -210,6 +217,7 @@ class ListViewModel(
             return
         }
         _view.value = view
+        _capped.value = false
         savedState[KEY_VIEW] = view.raw
         appScope.launch { settings.setLastView(view.raw) }
         viewModelScope.launch {
@@ -244,6 +252,15 @@ class ListViewModel(
     fun onVisible(frame: ListFrame): Boolean {
         // the snapshot is being swapped; keep the frames coming so tracking resumes right after
         if (applying) return true
+        // Time on screen belongs to the list it was earned in. The old list stays up for a few
+        // frames after the swap and may hold the same items, and the new one jumps into place
+        // before it settles, so start over on the first frame of a different list.
+        if (frame.shown !== lastShown) {
+            lastShown = frame.shown
+            tracker.reset()
+            lastFrameIndex = HashMap()
+            return true
+        }
         val readNow = read.value
         val current = HashMap<String, Int>(frame.items.size * 2)
         val visible = ArrayList<Visibility>(frame.items.size + 4)
@@ -328,11 +345,17 @@ class ListViewModel(
                         Result.failure(e)
                     }
                     result.fold(
-                        onSuccess = { ids ->
-                            if (v == _view.value) replaceSnapshot(ids, clock(), v) else again = true
-                            _message.value = null
+                        onSuccess = { r ->
+                            if (v == _view.value) {
+                                replaceSnapshot(r.ids, clock(), v)
+                                _capped.value = r.capped
+                            } else {
+                                again = true
+                            }
+                            _message.value = if (r.marksStuck) Note(R.string.note_marks_unsent) else null
                         },
                         onFailure = { e ->
+                            // only a 401 means the key is bad; a 403 is a refusal that signing in again will not change
                             if (e == ApiError.BadCredentials) {
                                 creds.clear()
                             } else {

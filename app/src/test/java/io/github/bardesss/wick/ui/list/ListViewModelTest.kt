@@ -14,6 +14,7 @@ import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.CountEntity
 import io.github.bardesss.wick.db.FeedEntity
 import io.github.bardesss.wick.db.ItemEntity
+import io.github.bardesss.wick.db.PendingMarkAllEntity
 import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.FakeReaderApi
 import io.github.bardesss.wick.sync.MarkQueue
@@ -261,6 +262,37 @@ class ListViewModelTest {
     }
 
     @Test
+    fun forbidden_keeps_the_sign_in_and_says_so() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+
+        api.failNext(1, ApiError.Forbidden)
+        vm.refresh()
+
+        assertEquals(Note(R.string.error_forbidden), settle(vm.message) { it != null })
+        assertEquals("tok", creds.auth()?.token)
+    }
+
+    @Test
+    fun a_stuck_mark_all_leaves_a_note_after_a_successful_refresh() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+
+        db.queueDao().enqueueAll(PendingMarkAllEntity(streamRaw = StreamId.All.raw, olderThanUsec = 1_000_000))
+        api.failNext(1, ApiError.Http(500))
+        vm.refresh()
+        assertEquals(Note(R.string.note_marks_unsent), settle(vm.message) { it != null })
+
+        // the server takes it on the next try, and the note goes
+        vm.refresh()
+        assertNull(settle(vm.message) { it == null })
+    }
+
+    @Test
     fun resume_after_30_minutes_refreshes() = runTest(main, timeout = 30.seconds) {
         engine()
         seedServer()
@@ -280,12 +312,13 @@ class ListViewModelTest {
         assertEquals(listOf("c", "b", "a"), ids(vm, listOf("c", "b", "a")))
     }
 
-    private fun frame(t: Long, vararg rows: Pair<String, Int>, firstIndex: Int = 0): ListFrame =
+    private fun frame(t: Long, vararg rows: Pair<String, Int>, firstIndex: Int = 0, shown: Any? = null): ListFrame =
         ListFrame(
             nowMs = t,
             viewportStart = 0,
             viewportEnd = 800,
             items = rows.mapIndexed { n, (id, offset) -> FrameItem(id, firstIndex + n, offset, 100) },
+            shown = shown,
         )
 
     @Test
@@ -301,6 +334,26 @@ class ListViewModelTest {
         vm.onVisible(frame(420, "a" to 0, firstIndex = 1))
 
         assertEquals(setOf("b"), settle(vm.read) { it == setOf("b") })
+    }
+
+    @Test
+    fun time_on_screen_in_another_list_does_not_count() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.refreshing) { !it }
+
+        // b and a earn their time in one list, say all unread
+        val before = Any()
+        for (t in 0L..400L step 16) vm.onVisible(frame(t, "b" to 0, "a" to 100, shown = before))
+        // a feed holding the same items opens, and while it jumps into place b passes the top
+        val after = Any()
+        vm.onVisible(frame(420, "b" to 0, "a" to 100, shown = after))
+        vm.onVisible(frame(436, "a" to 0, firstIndex = 1, shown = after))
+        runCurrent()
+
+        assertEquals(emptySet<String>(), settle(vm.read) { it.isNotEmpty() })
     }
 
     @Test

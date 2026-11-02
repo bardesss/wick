@@ -1,6 +1,8 @@
 package io.github.bardesss.wick.api
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import okhttp3.Call
@@ -97,13 +99,16 @@ class GReaderApi(
         }
     }
 
-    private inline fun <reified T> decode(text: String): T =
-        try {
-            json.decodeFromString<T>(text)
-        } catch (e: SerializationException) {
-            throw ApiError.Malformed
-        } catch (e: IllegalArgumentException) {
-            throw ApiError.Malformed
+    // a full listing is a lot of json; callers may be on the main thread
+    private suspend inline fun <reified T> decode(text: String): T =
+        withContext(Dispatchers.Default) {
+            try {
+                json.decodeFromString<T>(text)
+            } catch (e: SerializationException) {
+                throw ApiError.Malformed
+            } catch (e: IllegalArgumentException) {
+                throw ApiError.Malformed
+            }
         }
 
     private fun currentAuth(): Auth = auth() ?: throw ApiError.BadCredentials
@@ -168,7 +173,7 @@ class GReaderApi(
             val call = client.newCall(request)
             cont.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) = cont.resumeWithException(e.toApiError())
+                override fun onFailure(call: Call, e: IOException) = cont.resumeWithException(e.toApiError(call.request()))
 
                 override fun onResponse(call: Call, response: Response) {
                     val text = try {
@@ -177,7 +182,7 @@ class GReaderApi(
                             r.body.string()
                         }
                     } catch (e: Exception) {
-                        cont.resumeWithException(if (e is IOException) e.toApiError() else e)
+                        cont.resumeWithException(if (e is IOException) e.toApiError(call.request()) else e)
                         return
                     }
                     cont.resume(text)
@@ -186,9 +191,14 @@ class GReaderApi(
         }
 
     private fun statusError(code: Int): ApiError =
-        if (code == 401 || code == 403) ApiError.BadCredentials else ApiError.Http(code)
+        when (code) {
+            401 -> ApiError.BadCredentials
+            403 -> ApiError.Forbidden
+            else -> ApiError.Http(code)
+        }
 
-    // the platform refuses plain http, which is not the same as a server that cannot be reached
-    private fun IOException.toApiError(): ApiError =
-        if (this is UnknownServiceException) ApiError.Cleartext else ApiError.Unreachable
+    // the platform refuses plain http, which is not the same as a server that cannot be reached;
+    // the same exception also reports a TLS handshake with no common protocol on an https address
+    private fun IOException.toApiError(request: Request): ApiError =
+        if (this is UnknownServiceException && !request.url.isHttps) ApiError.Cleartext else ApiError.Unreachable
 }

@@ -14,6 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import java.net.UnknownServiceException
 import java.util.concurrent.TimeUnit
 
 class GReaderApiTest {
@@ -74,9 +75,15 @@ class GReaderApiTest {
     }
 
     @Test
-    fun login_403_is_BadCredentials() {
-        server.enqueue(MockResponse().setResponseCode(403).setBody("Error=BadAuthentication"))
+    fun login_401_is_BadCredentials() {
+        server.enqueue(MockResponse().setResponseCode(401).setBody("Error=BadAuthentication"))
         expectError(ApiError.BadCredentials) { api.login(serverUrl(), "u", "bad") }
+    }
+
+    @Test
+    fun login_403_is_Forbidden() {
+        server.enqueue(MockResponse().setResponseCode(403))
+        expectError(ApiError.Forbidden) { api.login(serverUrl(), "u", "k") }
     }
 
     @Test
@@ -277,9 +284,9 @@ class GReaderApiTest {
     }
 
     @Test
-    fun forbidden_on_authenticated_calls_is_BadCredentials() {
+    fun forbidden_on_authenticated_calls_is_Forbidden() {
         server.enqueue(MockResponse().setResponseCode(403))
-        expectError(ApiError.BadCredentials) { api.feeds() }
+        expectError(ApiError.Forbidden) { api.feeds() }
     }
 
     @Test
@@ -323,5 +330,16 @@ class GReaderApiTest {
         val tlsOnly = OkHttpClient.Builder().connectionSpecs(listOf(ConnectionSpec.MODERN_TLS)).build()
         val strict = GReaderApi(tlsOnly) { Auth(serverUrl(), "u/k") }
         expectError(ApiError.Cleartext) { strict.feeds() }
+    }
+
+    @Test
+    fun a_refused_service_on_https_is_not_told_as_cleartext() {
+        val refusing = OkHttpClient.Builder()
+            .addInterceptor { throw UnknownServiceException("Unable to find acceptable protocols") }
+            .build()
+        val tls = GReaderApi(refusing) { Auth("https://feeds.example.com", "u/k") }
+        val plain = GReaderApi(refusing) { Auth("http://feeds.example.com", "u/k") }
+        expectError(ApiError.Unreachable) { tls.feeds() }
+        expectError(ApiError.Cleartext) { plain.feeds() }
     }
 }

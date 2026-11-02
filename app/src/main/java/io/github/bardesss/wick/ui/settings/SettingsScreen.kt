@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.bardesss.wick.BuildConfig
@@ -202,26 +204,48 @@ private fun SwitchRow(label: String, checked: Boolean?, onChange: (Boolean) -> U
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TwoChoiceRow(label: String, first: String, second: String, value: Boolean?, onChange: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().height(RowHeight),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, style = RowStyle, color = WickColors.Paper, modifier = Modifier.weight(1f))
-        Spacer(Modifier.width(12.dp))
-        SingleChoiceSegmentedButtonRow {
-            listOf(first to false, second to true).forEachIndexed { index, (text, choice) ->
-                SegmentedButton(
-                    selected = value == choice,
-                    onClick = { onChange(choice) },
-                    enabled = value != null,
-                    shape = SegmentedButtonDefaults.itemShape(index, count = 2),
-                    colors = SegmentColors,
-                    contentPadding = SegmentPadding,
-                    // the colour says which is chosen; a check mark would only make it wider
-                    icon = {},
-                ) {
-                    Text(text, style = SegmentStyle, maxLines = 1)
+    // the segments sit beside the label, or below it when both do not fit on one line
+    Layout(
+        modifier = Modifier.fillMaxWidth(),
+        content = {
+            Text(label, style = RowStyle, color = WickColors.Paper)
+            SingleChoiceSegmentedButtonRow {
+                listOf(first to false, second to true).forEachIndexed { index, (text, choice) ->
+                    SegmentedButton(
+                        selected = value == choice,
+                        onClick = { onChange(choice) },
+                        enabled = value != null,
+                        shape = SegmentedButtonDefaults.itemShape(index, count = 2),
+                        colors = SegmentColors,
+                        contentPadding = SegmentPadding,
+                        // the colour says which is chosen; a check mark would only make it wider
+                        icon = {},
+                    ) {
+                        Text(text, style = SegmentStyle, maxLines = 1)
+                    }
                 }
+            }
+        },
+    ) { measurables, constraints ->
+        val gap = 12.dp.roundToPx()
+        val rowHeight = RowHeight.roundToPx()
+        val width = constraints.maxWidth
+        val segments = measurables[1].measure(Constraints(maxWidth = width))
+        val sideBySide = measurables[0].maxIntrinsicWidth(Constraints.Infinity) + gap + segments.width <= width
+        if (sideBySide) {
+            val text = measurables[0].measure(Constraints(maxWidth = width - gap - segments.width))
+            val height = maxOf(rowHeight, text.height, segments.height)
+            layout(width, height) {
+                text.placeRelative(0, (height - text.height) / 2)
+                segments.placeRelative(width - segments.width, (height - segments.height) / 2)
+            }
+        } else {
+            val text = measurables[0].measure(Constraints(maxWidth = width))
+            val pad = 8.dp.roundToPx()
+            val height = maxOf(rowHeight, pad + text.height + pad / 2 + segments.height + pad)
+            layout(width, height) {
+                text.placeRelative(0, pad)
+                segments.placeRelative(width - segments.width, height - pad - segments.height)
             }
         }
     }

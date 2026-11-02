@@ -91,6 +91,9 @@ abstract class ItemDao {
     @Query("UPDATE ItemEntity SET manualUnread = 0 WHERE manualUnread = 1")
     abstract suspend fun clearManualUnread()
 
+    @Query("SELECT EXISTS(SELECT 1 FROM ItemEntity)")
+    abstract suspend fun any(): Boolean
+
     @Query("SELECT html FROM ItemEntity WHERE id = :id")
     abstract suspend fun htmlOf(id: String): String?
 
