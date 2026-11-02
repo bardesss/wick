@@ -88,7 +88,7 @@ class SyncEngineTest {
         api.addItem("c", "feed/2", 300)
         val engine = engine()
         engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids
-        db.itemDao().setRead("b", read = true, manualUnread = false)
+        db.itemDao().setRead("b", read = true, manualUnread = false, nowMs = 1)
         db.queueDao().enqueue(PendingMarkEntity("b", read = true, queuedAt = 1))
         // the mark is stuck: the server keeps answering 500 to edit-tag
         api.failNext(1, ApiError.Http(500))
@@ -123,7 +123,7 @@ class SyncEngineTest {
         engine.refresh(StreamId.All, oldestFirst = false).getOrThrow().ids
 
         // read a (feed/1), unread e (feed/3)
-        db.itemDao().setRead("a", read = true, manualUnread = false)
+        db.itemDao().setRead("a", read = true, manualUnread = false, nowMs = 1)
         db.queueDao().enqueue(PendingMarkEntity("a", read = true, queuedAt = 1))
         db.itemDao().upsertKeepingLocal(listOf(local("e", "feed/3", 140)))
         db.queueDao().enqueue(PendingMarkEntity("e", read = false, queuedAt = 2))

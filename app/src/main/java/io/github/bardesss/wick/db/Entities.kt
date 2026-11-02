@@ -1,5 +1,6 @@
 package io.github.bardesss.wick.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -15,6 +16,8 @@ data class ItemEntity(
     val html: String?,
     val read: Boolean,
     val manualUnread: Boolean = false,
+    /** When it was last marked read on this phone, one item at a time; null if never. */
+    @ColumnInfo(defaultValue = "NULL") val readAtMs: Long? = null,
 )
 
 @Entity

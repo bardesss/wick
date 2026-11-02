@@ -24,6 +24,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 class SyncWorkerTest {
@@ -152,12 +153,30 @@ class SyncWorkerTest {
         WorkManagerTestInitHelper.initializeTestWorkManager(context, Configuration.Builder().build())
         val wm = WorkManager.getInstance(context)
 
-        SyncWork.schedule(wm)
-        SyncWork.schedule(wm)
+        SyncWork.schedule(wm, 60)
+        SyncWork.schedule(wm, 60)
 
         val infos = wm.getWorkInfosForUniqueWork(SyncWork.SYNC).get()
         assertEquals(1, infos.size)
         val c = infos.single().constraints
         assertEquals(androidx.work.NetworkType.CONNECTED, c.requiredNetworkType)
+        assertEquals(TimeUnit.MINUTES.toMillis(60), infos.single().periodicityInfo?.repeatIntervalMillis)
+    }
+
+    @Test
+    fun a_new_interval_changes_the_job_and_off_cancels_it() {
+        WorkManagerTestInitHelper.initializeTestWorkManager(context, Configuration.Builder().build())
+        val wm = WorkManager.getInstance(context)
+
+        SyncWork.schedule(wm, 60)
+        SyncWork.schedule(wm, 15)
+
+        val infos = wm.getWorkInfosForUniqueWork(SyncWork.SYNC).get()
+        assertEquals(1, infos.size)
+        assertEquals(TimeUnit.MINUTES.toMillis(15), infos.single().periodicityInfo?.repeatIntervalMillis)
+
+        SyncWork.schedule(wm, 0)
+
+        assertTrue(wm.getWorkInfosForUniqueWork(SyncWork.SYNC).get().all { it.state == WorkInfo.State.CANCELLED })
     }
 }

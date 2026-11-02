@@ -11,6 +11,11 @@ data class LocalState(val id: String, val read: Boolean, val manualUnread: Boole
 
 data class ItemFeed(val id: String, val feedId: String)
 
+data class ReadAt(val id: String, val readAtMs: Long)
+
+/** How many of the items read here last outlive pruning, the most the recently read view shows. */
+const val RECENT_KEPT = 200
+
 /** How many ids go into one IN (...) list, below SQLite's limit on query arguments. */
 internal const val CHUNK = 500
 
@@ -39,8 +44,19 @@ abstract class ItemDao {
     @Query("SELECT id FROM FeedEntity WHERE folder = :folder")
     protected abstract suspend fun feedsInFolder(folder: String): List<String>
 
-    @Query("UPDATE ItemEntity SET read = :read, manualUnread = :manualUnread WHERE id = :id")
-    abstract suspend fun setRead(id: String, read: Boolean, manualUnread: Boolean)
+    @Query("SELECT id, readAtMs FROM ItemEntity WHERE readAtMs IS NOT NULL AND id IN (:ids)")
+    protected abstract suspend fun readAtChunk(ids: List<String>): List<ReadAt>
+
+    /** Sets the read state of one item; marking it read also stamps it with [nowMs] for the recently read view. */
+    @Query(
+        "UPDATE ItemEntity SET read = :read, manualUnread = :manualUnread, " +
+            "readAtMs = CASE WHEN :read THEN :nowMs ELSE readAtMs END WHERE id = :id",
+    )
+    abstract suspend fun setRead(id: String, read: Boolean, manualUnread: Boolean, nowMs: Long)
+
+    /** The items read here last, newest first, leaving out any marked unread since. */
+    @Query("SELECT id FROM ItemEntity WHERE read = 1 AND readAtMs IS NOT NULL ORDER BY readAtMs DESC, id ASC LIMIT :limit")
+    abstract suspend fun recentlyRead(limit: Int): List<String>
 
     @Query("SELECT MAX(publishedSec) FROM ItemEntity WHERE read = 0")
     protected abstract suspend fun newestUnreadAll(): Long?
@@ -71,13 +87,14 @@ abstract class ItemDao {
     )
     protected abstract suspend fun unreadIn(feedIds: List<String>, oldestFirst: Boolean): List<String>
 
-    // rows in the list snapshot stay until the snapshot is replaced
+    // rows in the list snapshot stay until the snapshot is replaced, and the ones read here last stay for good
     @Query(
         "SELECT id FROM ItemEntity WHERE read = 1 " +
             "AND id NOT IN (SELECT itemId FROM PendingMarkEntity) " +
-            "AND id NOT IN (SELECT itemId FROM SnapshotEntity)",
+            "AND id NOT IN (SELECT itemId FROM SnapshotEntity) " +
+            "AND id NOT IN (SELECT id FROM ItemEntity WHERE readAtMs IS NOT NULL ORDER BY readAtMs DESC LIMIT :kept)",
     )
-    protected abstract suspend fun prunable(): List<String>
+    protected abstract suspend fun prunable(kept: Int): List<String>
 
     @Query("DELETE FROM ItemEntity WHERE id IN (:ids)")
     protected abstract suspend fun deleteByIds(ids: List<String>)
@@ -119,6 +136,8 @@ abstract class ItemDao {
     open suspend fun upsertKeepingLocal(items: List<ItemEntity>) {
         val ids = items.map { it.id }
         val existing = ids.chunked(CHUNK).flatMap { localState(it) }.associateBy { it.id }
+        // the server does not know when an item was read here
+        val readAt = ids.chunked(CHUNK).flatMap { readAtChunk(it) }.associate { it.id to it.readAtMs }
         val pending = ids.chunked(CHUNK).flatMap { pendingAmong(it) }.toSet()
         val covers = markAllCovers()
         val merged = items.map { incoming ->
@@ -131,7 +150,7 @@ abstract class ItemDao {
                 local != null -> incoming.copy(manualUnread = local.manualUnread)
                 else -> incoming
             }
-        }
+        }.map { it.copy(readAtMs = readAt[it.id]) }
         merged.chunked(CHUNK).forEach { insertAll(it) }
     }
 
@@ -140,6 +159,7 @@ abstract class ItemDao {
     private suspend fun markAllCovers(): List<MarkAllCover> = pendingMarkAlls().map { m ->
         val feeds = when (val s = StreamId.parse(m.streamRaw)) {
             StreamId.All -> null
+            StreamId.Read -> emptySet()
             is StreamId.Folder -> feedsInFolder(s.name).toSet()
             is StreamId.Feed -> setOf(s.id)
         }
@@ -157,7 +177,7 @@ abstract class ItemDao {
 
     @Transaction
     open suspend fun pruneReadNotIn(keep: Set<String>) {
-        prunable().filter { it !in keep }.chunked(CHUNK).forEach { deleteByIds(it) }
+        prunable(RECENT_KEPT).filter { it !in keep }.chunked(CHUNK).forEach { deleteByIds(it) }
     }
 
     /** The publish time of the newest unread item of [feedIds] (all feeds when null), or null when none. */

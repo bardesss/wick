@@ -77,7 +77,7 @@ class MarkQueue(
         ops.trySend {
             stateLock.withLock {
                 inTransaction {
-                    itemDao.setRead(id, read, manualUnread = manual && !read)
+                    itemDao.setRead(id, read, manualUnread = manual && !read, nowMs = clock())
                     queueDao.enqueueOrCancel(PendingMarkEntity(id, read, nextStamp()), inFlight = id in inFlight)
                 }
             }

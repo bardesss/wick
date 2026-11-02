@@ -92,6 +92,7 @@ abstract class QueueDao {
         deleteAll(m.id)
         when (val s = StreamId.parse(m.streamRaw)) {
             StreamId.All -> zeroAllFeedCounts()
+            StreamId.Read -> Unit
             is StreamId.Folder -> zeroFolderFeedCounts(s.name)
             is StreamId.Feed -> zeroFeedCount(s.id)
         }

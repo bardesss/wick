@@ -259,6 +259,7 @@ class ScreenSnapshots {
 
     private val pickerEntries = listOf(
         PickerEntry.All(87),
+        PickerEntry.Recent,
         PickerEntry.Folder("Food", 0),
         PickerEntry.Feed("feed/6", "Cooking Weekly", null, 0, indented = true),
         PickerEntry.Folder("Tech", 71),

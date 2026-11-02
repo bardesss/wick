@@ -11,6 +11,7 @@ sealed interface StreamId {
 
         fun parse(raw: String): StreamId = when {
             raw == All.raw -> All
+            raw == Read.raw -> Read
             raw.startsWith(LABEL_PREFIX) -> Folder(raw.removePrefix(LABEL_PREFIX))
             else -> Feed(raw)
         }
@@ -18,6 +19,15 @@ sealed interface StreamId {
 
     data object All : StreamId {
         override val raw = "user/-/state/com.google/reading-list"
+        override val encodedPath = raw
+    }
+
+    /**
+     * The items marked read. Wick never fetches it: the view shows the items read on this phone,
+     * from the local database.
+     */
+    data object Read : StreamId {
+        override val raw = "user/-/state/com.google/read"
         override val encodedPath = raw
     }
 
@@ -41,6 +51,7 @@ interface FeedInFolder {
 /** The ids of the [feeds] this view covers, or null for the whole account. */
 fun StreamId.feedIds(feeds: List<FeedInFolder>): List<String>? = when (this) {
     StreamId.All -> null
+    StreamId.Read -> emptyList()
     is StreamId.Folder -> feeds.filter { it.folder == name }.map { it.id }
     is StreamId.Feed -> listOf(id)
 }

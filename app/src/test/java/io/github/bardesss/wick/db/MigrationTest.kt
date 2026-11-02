@@ -66,6 +66,8 @@ class MigrationTest {
             assertEquals(listOf("user/-/label/Tech"), db.queueDao().pendingAll().map { it.streamRaw })
             assertEquals(listOf(FeedEntity("feed/1", "News", "Tech", "https://n.example/i.png")), db.feedDao().feedsNow())
             assertEquals(setOf("a"), db.itemDao().readAmong(listOf("a")))
+            // version 3 does not know when older items were read, so none of them count as recent
+            assertEquals(emptyList<String>(), db.itemDao().recentlyRead(10))
         } finally {
             db.close()
         }

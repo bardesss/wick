@@ -9,7 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalView
 import kotlinx.coroutines.flow.Flow
 
-/** A light tick for committed actions, off when the haptics setting is off. */
+/** Feedback for gestures and committed actions, off when the haptics setting is off. */
 class Haptics(private val view: View, private val enabled: Flow<Boolean>) {
     // stays off until the setting has been read once
     @Volatile
@@ -20,14 +20,24 @@ class Haptics(private val view: View, private val enabled: Flow<Boolean>) {
         enabled.collect { on = it }
     }
 
-    fun tick() {
-        if (!on) return
-        val type = if (Build.VERSION.SDK_INT >= 34) {
-            HapticFeedbackConstants.SEGMENT_TICK
-        } else {
-            HapticFeedbackConstants.CLOCK_TICK
-        }
-        view.performHapticFeedback(type)
+    /** A swipe crossed the point where letting go acts. */
+    fun threshold() = perform(
+        when {
+            Build.VERSION.SDK_INT >= 34 -> HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE
+            else -> HapticFeedbackConstants.CONTEXT_CLICK
+        },
+    )
+
+    /** An action went through, like marking a whole view read. */
+    fun confirm() = perform(
+        when {
+            Build.VERSION.SDK_INT >= 30 -> HapticFeedbackConstants.CONFIRM
+            else -> HapticFeedbackConstants.LONG_PRESS
+        },
+    )
+
+    private fun perform(type: Int) {
+        if (on) view.performHapticFeedback(type)
     }
 }
 

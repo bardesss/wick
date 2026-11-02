@@ -11,6 +11,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import io.github.bardesss.wick.sync.SyncWork
 import io.github.bardesss.wick.sync.SyncWorkerFactory
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 class WickApp : Application(), SingletonImageLoader.Factory, Configuration.Provider {
@@ -32,7 +33,10 @@ class WickApp : Application(), SingletonImageLoader.Factory, Configuration.Provi
         super.onCreate()
         container = AppContainer(this)
         val wm = WorkManager.getInstance(this)
-        SyncWork.schedule(wm)
+        // follows the setting, so a new interval takes effect at once
+        container.appScope.launch {
+            container.settings.syncMinutes.distinctUntilChanged().collect { SyncWork.schedule(wm, it) }
+        }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {
                 container.appScope.launch {

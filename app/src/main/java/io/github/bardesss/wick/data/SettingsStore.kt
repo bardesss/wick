@@ -62,6 +62,23 @@ class SettingsStore(private val store: DataStore<Preferences>) {
         store.edit { it[hapticsKey] = value }
     }
 
+    private val syncMinutesKey = intPreferencesKey("sync_minutes")
+    private val recentCountKey = intPreferencesKey("recent_count")
+
+    /** Minutes between background syncs, or 0 for none. A value from elsewhere falls back to the default. */
+    val syncMinutes: Flow<Int> = store.data.map { p -> p[syncMinutesKey]?.takeIf { it in SYNC_CHOICES } ?: SYNC_DEFAULT }
+
+    /** How many of the items read last the "Recently read" view shows. */
+    val recentCount: Flow<Int> = store.data.map { p -> p[recentCountKey]?.takeIf { it in RECENT_CHOICES } ?: RECENT_DEFAULT }
+
+    suspend fun setSyncMinutes(value: Int) {
+        store.edit { it[syncMinutesKey] = value }
+    }
+
+    suspend fun setRecentCount(value: Int) {
+        store.edit { it[recentCountKey] = value }
+    }
+
     private val collapsedKey = stringSetPreferencesKey("collapsed_folders")
 
     /** Names of the drawer folders whose feeds are folded away. */
@@ -117,6 +134,12 @@ class SettingsStore(private val store: DataStore<Preferences>) {
     companion object {
         private const val IN_APP = "in_app"
         private const val DEFAULT_APP = "default_app"
+
+        /** WorkManager runs periodic work at most every 15 minutes. */
+        val SYNC_CHOICES = listOf(15, 30, 60, 180, 0)
+        const val SYNC_DEFAULT = 60
+        val RECENT_CHOICES = listOf(50, 100, 200)
+        const val RECENT_DEFAULT = 100
 
         fun create(context: Context) = SettingsStore(
             PreferenceDataStoreFactory.create(corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }) {

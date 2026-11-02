@@ -35,6 +35,7 @@ class PickerModelTest {
         assertEquals(
             listOf(
                 PickerEntry.All(12),
+                PickerEntry.Recent,
                 PickerEntry.Folder("Food", 1),
                 PickerEntry.Feed("feed/6", "Cooking", "/icon/6", 0, indented = true),
                 PickerEntry.Folder("Tech", 7),
@@ -53,7 +54,7 @@ class PickerModelTest {
     fun zero_counts_kept() {
         val entries = buildPicker(feeds, emptyMap())
 
-        assertEquals(1 + 3 + feeds.size, entries.size)
+        assertEquals(2 + 3 + feeds.size, entries.size)
         assertEquals(PickerEntry.All(0), entries.first())
         assertTrue(entries.filterIsInstance<PickerEntry.Feed>().all { it.count == 0 })
         assertTrue(entries.filterIsInstance<PickerEntry.Folder>().all { it.count == 0 })
@@ -61,7 +62,7 @@ class PickerModelTest {
 
     @Test
     fun no_feeds_still_lists_all() {
-        assertEquals(listOf<PickerEntry>(PickerEntry.All(5)), buildPicker(emptyList(), mapOf(StreamId.All.raw to 5)))
+        assertEquals(listOf(PickerEntry.All(5), PickerEntry.Recent), buildPicker(emptyList(), mapOf(StreamId.All.raw to 5)))
     }
 
     @Test
@@ -91,6 +92,7 @@ class PickerModelTest {
     private fun names(list: List<PickerEntry>) = list.map {
         when (it) {
             is PickerEntry.All -> "all"
+            PickerEntry.Recent -> "recent"
             is PickerEntry.Folder -> "folder:" + it.name
             is PickerEntry.Feed -> it.id
         }
@@ -100,31 +102,31 @@ class PickerModelTest {
     fun hiding_drops_feeds_and_folders_with_nothing_unread() {
         val shown = withoutEmpty(withCounts, StreamId.All)
 
-        assertEquals(listOf("all", "folder:Tech", "feed/2"), names(shown))
+        assertEquals(listOf("all", "recent", "folder:Tech", "feed/2"), names(shown))
     }
 
     @Test
     fun hiding_keeps_the_selected_feed() {
         val shown = withoutEmpty(withCounts, StreamId.Feed("feed/5"))
 
-        assertEquals(listOf("all", "folder:Tech", "feed/2", "feed/5"), names(shown))
+        assertEquals(listOf("all", "recent", "folder:Tech", "feed/2", "feed/5"), names(shown))
     }
 
     @Test
     fun hiding_keeps_the_selected_folder_and_the_folder_of_a_selected_feed() {
         assertEquals(
-            listOf("all", "folder:Food", "folder:Tech", "feed/2"),
+            listOf("all", "recent", "folder:Food", "folder:Tech", "feed/2"),
             names(withoutEmpty(withCounts, StreamId.Folder("Food"))),
         )
         assertEquals(
-            listOf("all", "folder:Food", "feed/6", "folder:Tech", "feed/2"),
+            listOf("all", "recent", "folder:Food", "feed/6", "folder:Tech", "feed/2"),
             names(withoutEmpty(withCounts, StreamId.Feed("feed/6"))),
         )
     }
 
     @Test
     fun hiding_keeps_all_unread_when_nothing_is_unread() {
-        assertEquals(listOf("all"), names(withoutEmpty(buildPicker(feeds, emptyMap()), StreamId.All)))
+        assertEquals(listOf("all", "recent"), names(withoutEmpty(buildPicker(feeds, emptyMap()), StreamId.All)))
     }
 
     @Test

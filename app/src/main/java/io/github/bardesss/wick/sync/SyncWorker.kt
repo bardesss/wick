@@ -80,13 +80,20 @@ object SyncWork {
 
     private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
-    /** Runs the full sync every 60 minutes while there is a network. Calling it again keeps the existing job. */
-    fun schedule(wm: WorkManager) {
-        val request = PeriodicWorkRequestBuilder<SyncWorker>(60, TimeUnit.MINUTES)
+    /**
+     * Runs the full sync every [minutes] while there is a network, or never when it is 0. Calling
+     * it again with a new interval changes the existing job instead of starting a second one.
+     */
+    fun schedule(wm: WorkManager, minutes: Int) {
+        if (minutes <= 0) {
+            wm.cancelUniqueWork(SYNC)
+            return
+        }
+        val request = PeriodicWorkRequestBuilder<SyncWorker>(minutes.toLong(), TimeUnit.MINUTES)
             .setConstraints(online)
             .setInputData(SyncWorker.input(flushOnly = false))
             .build()
-        wm.enqueueUniquePeriodicWork(SYNC, ExistingPeriodicWorkPolicy.KEEP, request)
+        wm.enqueueUniquePeriodicWork(SYNC, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
     /** Queues a flush that outlives the process, but only when marks are waiting to be sent. */

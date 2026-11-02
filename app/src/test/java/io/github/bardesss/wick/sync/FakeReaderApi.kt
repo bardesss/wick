@@ -53,6 +53,7 @@ class FakeReaderApi : ReaderApi {
 
     private fun inStream(item: Item, stream: StreamId): Boolean = when (stream) {
         StreamId.All -> true
+        StreamId.Read -> false
         is StreamId.Folder -> feedList.firstOrNull { it.id == item.feedId }?.folder == stream.name
         is StreamId.Feed -> item.feedId == stream.id
     }

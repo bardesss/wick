@@ -101,6 +101,7 @@ class SyncEngine(
             for (m in markAlls) {
                 when (val s = StreamId.parse(m.streamRaw)) {
                     StreamId.All -> feeds.forEach { covered += it.id }
+                    StreamId.Read -> Unit
                     is StreamId.Folder -> feeds.filter { it.folder == s.name }.forEach { covered += it.id }
                     is StreamId.Feed -> covered += s.id
                 }

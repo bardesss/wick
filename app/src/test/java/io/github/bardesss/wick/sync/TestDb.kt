@@ -21,14 +21,14 @@ fun inMemoryDb(): WickDb {
 }
 
 /** What a test checks of a stored item. */
-data class StoredItem(val id: String, val title: String, val read: Boolean, val manualUnread: Boolean)
+data class StoredItem(val id: String, val title: String, val read: Boolean, val manualUnread: Boolean, val readAtMs: Long? = null)
 
 /** The stored items among [ids], in that order; ids with no row are left out. */
 fun WickDb.storedItems(ids: List<String>): List<StoredItem> {
     val byId = HashMap<String, StoredItem>()
-    openHelper.readableDatabase.query("SELECT id, title, read, manualUnread FROM ItemEntity").use { c ->
+    openHelper.readableDatabase.query("SELECT id, title, read, manualUnread, readAtMs FROM ItemEntity").use { c ->
         while (c.moveToNext()) {
-            byId[c.getString(0)] = StoredItem(c.getString(0), c.getString(1), c.getInt(2) != 0, c.getInt(3) != 0)
+            byId[c.getString(0)] = StoredItem(c.getString(0), c.getString(1), c.getInt(2) != 0, c.getInt(3) != 0, if (c.isNull(4)) null else c.getLong(4))
         }
     }
     return ids.mapNotNull { byId[it] }

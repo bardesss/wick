@@ -16,10 +16,14 @@ import androidx.room.migration.AutoMigrationSpec
         SnapshotEntity::class,
         SnapshotMetaEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
     // the queue of read marks lives here too, so every change migrates instead of starting over
-    autoMigrations = [AutoMigration(from = 1, to = 2, spec = WickDb.DropFeedSite::class)],
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2, spec = WickDb.DropFeedSite::class),
+        // version 3 adds when an item was read here, for the recently read view
+        AutoMigration(from = 2, to = 3),
+    ],
 )
 abstract class WickDb : RoomDatabase() {
     /** Version 2 drops the feed's site address, which nothing read. */
