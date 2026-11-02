@@ -70,4 +70,25 @@ class FaviconCacheTest {
         assertTrue(memoryKeys.toString(), url in memoryKeys)
         assertTrue(memoryKeys.none { "apiKey" in it })
     }
+
+    @Test
+    fun an_svg_icon_loads() {
+        val svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#d33"/></svg>"""
+        server.enqueue(MockResponse().setHeader("Content-Type", "image/svg+xml").setBody(svg))
+        server.start()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dir = File(context.cacheDir, "favicon-svg-test").apply { deleteRecursively() }
+        val loader = buildImageLoader(context, OkHttpClient(), dir)
+        val url = server.url("/rest/feed/favicon/4").toString()
+
+        var result: ImageResult? = null
+        val worker = thread { result = runBlocking { loader.execute(ImageRequest.Builder(context).data(url).build()) } }
+        val deadline = System.currentTimeMillis() + 20_000
+        while (worker.isAlive && System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(5)
+        }
+
+        assertTrue("load failed: $result", result is SuccessResult)
+    }
 }
