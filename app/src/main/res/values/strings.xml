@@ -11,6 +11,10 @@
     <string name="list_all_unread">All unread</string>
     <string name="list_recently_read">Recently read</string>
     <string name="list_recent_empty">Items you read on this phone show up here</string>
+    <string name="list_search">Search</string>
+    <string name="list_search_hint">Search titles and feeds</string>
+    <string name="list_search_close">Close search</string>
+    <string name="list_search_empty">Nothing you read matches</string>
     <string name="caught_up_title">All caught up</string>
     <string name="caught_up_checking">Checking for new items</string>
     <string name="caught_up_check">Check for new items</string>

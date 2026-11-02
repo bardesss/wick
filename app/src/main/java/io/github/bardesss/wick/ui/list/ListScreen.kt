@@ -1,5 +1,6 @@
 package io.github.bardesss.wick.ui.list
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -12,6 +13,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -63,8 +67,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -117,6 +126,8 @@ private val MarkAllShape = RoundedCornerShape(18.dp)
 private val ArmedStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp)
 private val PillShape = RoundedCornerShape(16.dp)
 private val PillStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+private val SearchStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 15.sp)
+private val SearchShape = RoundedCornerShape(12.dp)
 private const val ARM_TIMEOUT_MS = 4000L
 
 /** The gap must hold this long before the pill shows, since a row turns read a moment before the count drops. */
@@ -138,6 +149,13 @@ fun newItems(count: Int, unreadRowsInSnapshot: Int, capped: Boolean = false, sup
 
 /** A refresh that left the gap no smaller than it found it, so another one would not help either. */
 fun refreshGainedNothing(gapBefore: Int, gapAfter: Int): Boolean = gapBefore > 0 && gapAfter >= gapBefore
+
+/** The rows whose title or feed name holds each word of [query], ignoring case. A blank query keeps them all. */
+fun searchRows(rows: List<RowModel>, query: String): List<RowModel> {
+    val words = query.split(' ', '\t').filter { it.isNotEmpty() }
+    if (words.isEmpty()) return rows
+    return rows.filter { row -> words.all { row.title.contains(it, ignoreCase = true) || row.source.contains(it, ignoreCase = true) } }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -335,9 +353,17 @@ fun ListContent(
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
     /** Fixed sideways offsets in px by row id, for previews; only the snapshot tests set it. */
     swipePreview: Map<String, Float> = emptyMap(),
+    /** A search that is already open, for previews; only the snapshot tests set it. */
+    searchPreview: String? = null,
 ) {
+    // null while the search is closed; only the recently read view has one, and leaving it closes it
+    var query by rememberSaveable(history) { mutableStateOf(searchPreview?.takeIf { history }) }
+    BackHandler(enabled = query != null) { query = null }
+    val found = remember(rows, query) { query?.let { q -> rows?.let { searchRows(it, q) } } ?: rows }
+    // each new search starts at the top of what it found
+    LaunchedEffect(query) { if (query != null) listState.scrollToItem(0) }
     val frameSink by rememberUpdatedState(onFrame)
-    val shownRows by rememberUpdatedState(rows)
+    val shownRows by rememberUpdatedState(found)
     LaunchedEffect(listState) {
         // every layout change, then every frame while a row on screen still needs dwell time
         snapshotFlow { listState.layoutInfo }.collectLatest {
@@ -353,7 +379,16 @@ fun ListContent(
 
     Box(Modifier.fillMaxSize().background(WickColors.Night)) {
         Column(Modifier.fillMaxSize()) {
-            Header(viewName, if (history) null else count, animate = !reducedMotion, markArmed, onMarkAll, onOpenPicker)
+            Header(
+                viewName,
+                if (history) null else count,
+                animate = !reducedMotion,
+                markArmed,
+                onMarkAll,
+                onOpenPicker,
+                onSearch = if (history && query == null) ({ query = "" }) else null,
+            )
+            query?.let { q -> SearchField(q, onQuery = { query = it }, onClose = { query = null }) }
             if (message != null) {
                 Text(
                     message,
@@ -424,10 +459,10 @@ fun ListContent(
                 },
             ) {
                 // laying out an empty list before the rows arrive would reset a restored scroll position
-                if (rows != null) BoxWithConstraints(Modifier.fillMaxSize()) {
+                if (found != null) BoxWithConstraints(Modifier.fillMaxSize()) {
                     val footerHeight = maxHeight
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("list")) {
-                        itemsIndexed(rows, key = { _, row -> row.id }, contentType = { _, _ -> "item" }) { index, row ->
+                        itemsIndexed(found, key = { _, row -> row.id }, contentType = { _, _ -> "item" }) { index, row ->
                             val isRead by remember(row.id) { derivedStateOf { row.id in read.value } }
                             SwipeRow(
                                 id = row.id,
@@ -462,10 +497,10 @@ fun ListContent(
                             }
                         }
                         if (history) {
-                            if (rows.isEmpty()) {
+                            if (found.isEmpty()) {
                                 item(key = FOOTER_KEY, contentType = "history_empty") {
                                     Text(
-                                        stringResource(R.string.list_recent_empty),
+                                        stringResource(if (rows.isNullOrEmpty()) R.string.list_recent_empty else R.string.list_search_empty),
                                         style = WickText.Note,
                                         color = WickColors.Meta,
                                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp),
@@ -543,6 +578,8 @@ private fun Header(
     markArmed: Boolean,
     onMarkAll: () -> Unit,
     onClick: () -> Unit,
+    /** Opens the search; null hides the control. */
+    onSearch: (() -> Unit)? = null,
 ) {
     val chooseView = stringResource(R.string.list_choose_view)
     var tick by remember { mutableStateOf(false) }
@@ -596,6 +633,65 @@ private fun Header(
             Spacer(Modifier.width(4.dp))
             MarkAll(count, markArmed, animate, onMarkAll)
         }
+        if (onSearch != null) {
+            Spacer(Modifier.width(4.dp))
+            HeaderIcon(R.drawable.ic_search, stringResource(R.string.list_search), "search", onSearch)
+        }
+    }
+}
+
+/** A plain icon with a 48dp tap target, in the colour of the mark all check. */
+@Composable
+private fun HeaderIcon(icon: Int, label: String, tag: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .heightIn(min = TapTarget)
+            .widthIn(min = TapTarget)
+            .semantics { role = Role.Button; contentDescription = label }
+            .clickable(onClick = onClick)
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(painter = painterResource(icon), contentDescription = null, tint = WickColors.Amber, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** The search line under the header; it takes the keyboard as it opens. */
+@Composable
+private fun SearchField(query: String, onQuery: (String) -> Unit, onClose: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    val hint = stringResource(R.string.list_search_hint)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 22.dp, end = 22.dp, bottom = 8.dp)
+            .background(WickColors.Raised, SearchShape)
+            .padding(start = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicTextField(
+            value = query,
+            onValueChange = onQuery,
+            singleLine = true,
+            textStyle = SearchStyle.copy(color = WickColors.Paper),
+            cursorBrush = SolidColor(WickColors.Amber),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focus)
+                .semantics { contentDescription = hint }
+                .testTag("search_field"),
+            decorationBox = { field ->
+                Box {
+                    if (query.isEmpty()) Text(hint, style = SearchStyle, color = WickColors.Meta, maxLines = 1)
+                    field()
+                }
+            },
+        )
+        HeaderIcon(R.drawable.ic_close, stringResource(R.string.list_search_close), "search_close", onClose)
     }
 }
 
