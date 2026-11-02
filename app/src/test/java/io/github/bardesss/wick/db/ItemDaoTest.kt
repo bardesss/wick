@@ -59,10 +59,48 @@ class ItemDaoTest {
     private fun row(id: String) = db.storedItems(listOf(id)).single()
 
     @Test
+    fun recently_read_lists_marks_made_here_newest_first() = runTest {
+        items.upsertKeepingLocal(listOf(item("a"), item("b"), item("c", publishedSec = 50)))
+        items.setRead("a", read = true, manualUnread = false, nowMs = 10)
+        items.setRead("b", read = true, manualUnread = false, nowMs = 20)
+        // a mark-all is not reading, so it leaves no trace here
+        items.markReadWhere(null, publishedAtOrBeforeSec = 60)
+
+        assertEquals(listOf("b", "a"), items.recentlyRead(10))
+        assertEquals(listOf("b"), items.recentlyRead(1))
+
+        items.setRead("a", read = false, manualUnread = true, nowMs = 30)
+
+        assertEquals(listOf("b"), items.recentlyRead(10))
+    }
+
+    @Test
+    fun upsert_keeps_when_an_item_was_read_here() = runTest {
+        items.upsertKeepingLocal(listOf(item("a")))
+        items.setRead("a", read = true, manualUnread = false, nowMs = 10)
+
+        items.upsertKeepingLocal(listOf(item("a", title = "New A")))
+
+        assertEquals(10L, row("a").readAtMs)
+    }
+
+    @Test
+    fun pruning_keeps_the_items_read_here_last() = runTest {
+        val stamped = (0..RECENT_KEPT).map { "r$it" }
+        items.upsertKeepingLocal(stamped.map { item(it) } + item("plain", read = true))
+        stamped.forEachIndexed { i, id -> items.setRead(id, read = true, manualUnread = false, nowMs = i + 1L) }
+
+        items.pruneReadNotIn(emptySet())
+
+        val left = db.storedItems(stamped + "plain").map { it.id }.toSet()
+        assertEquals(stamped.drop(1).toSet(), left)
+    }
+
+    @Test
     fun upsert_preserves_pending_local_state() = runTest {
         items.upsertKeepingLocal(listOf(item("a"), item("b")))
-        items.setRead("a", read = true, manualUnread = false)
-        items.setRead("b", read = false, manualUnread = true)
+        items.setRead("a", read = true, manualUnread = false, nowMs = 1)
+        items.setRead("b", read = false, manualUnread = true, nowMs = 1)
         queue.enqueue(PendingMarkEntity("a", read = true, queuedAt = 1))
         queue.enqueue(PendingMarkEntity("b", read = false, queuedAt = 2))
 
@@ -117,7 +155,7 @@ class ItemDaoTest {
         items.upsertKeepingLocal(listOf(item("a", publishedSec = 100)))
         items.markReadWhere(null, 200)
         queue.enqueueAll(PendingMarkAllEntity(streamRaw = "user/-/state/com.google/reading-list", olderThanUsec = 201 * 1_000_000L))
-        items.setRead("a", read = false, manualUnread = true)
+        items.setRead("a", read = false, manualUnread = true, nowMs = 1)
         queue.enqueue(PendingMarkEntity("a", read = false, queuedAt = 1))
 
         items.upsertKeepingLocal(listOf(item("a", publishedSec = 100)))

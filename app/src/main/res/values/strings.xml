@@ -9,6 +9,8 @@
     <string name="login_button">Sign in</string>
     <string name="settings">Settings</string>
     <string name="list_all_unread">All unread</string>
+    <string name="list_recently_read">Recently read</string>
+    <string name="list_recent_empty">Items you read on this phone show up here</string>
     <string name="caught_up_title">All caught up</string>
     <string name="caught_up_checking">Checking for new items</string>
     <string name="caught_up_check">Check for new items</string>
@@ -59,6 +61,9 @@
     <string name="settings_links">Open links in</string>
     <string name="settings_links_in_app">In app</string>
     <string name="settings_links_default">Default app</string>
+    <string name="settings_sync">Background sync</string>
+    <string name="settings_sync_off">Off</string>
+    <string name="settings_recent">Recently read</string>
     <string name="settings_account">Account</string>
     <string name="settings_source">Source code</string>
     <string name="settings_sign_out">Sign out</string>

@@ -200,6 +200,7 @@ private fun EntryRow(
         ) {
             val (label, style, color) = when (entry) {
                 is PickerEntry.All -> Triple(stringResource(R.string.list_all_unread), AllStyle, WickColors.Paper)
+                PickerEntry.Recent -> Triple(stringResource(R.string.list_recently_read), FeedStyle, WickColors.Meta)
                 is PickerEntry.Folder -> Triple(entry.name, FolderStyle, WickColors.Paper)
                 is PickerEntry.Feed -> Triple(entry.title, FeedStyle, WickColors.Muted)
             }
@@ -215,8 +216,11 @@ private fun EntryRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.width(12.dp))
-            Text(entry.count.toString(), style = CountStyle, color = countColor)
+            // it lists read items, so there is nothing to count
+            if (entry != PickerEntry.Recent) {
+                Spacer(Modifier.width(12.dp))
+                Text(entry.count.toString(), style = CountStyle, color = countColor)
+            }
         }
     }
 }
@@ -275,12 +279,14 @@ private fun MarkAllButton(count: Int, enabled: Boolean, armed: Boolean, animate:
 
 private fun PickerEntry.key(): String = when (this) {
     is PickerEntry.All -> "all"
+    PickerEntry.Recent -> "recent"
     is PickerEntry.Folder -> "folder:$name"
     is PickerEntry.Feed -> "feed:$id"
 }
 
 private fun PickerEntry.stream(): StreamId = when (this) {
     is PickerEntry.All -> StreamId.All
+    PickerEntry.Recent -> StreamId.Read
     is PickerEntry.Folder -> StreamId.Folder(name)
     is PickerEntry.Feed -> StreamId.Feed(id)
 }

@@ -337,6 +337,33 @@ class ListViewModelTest {
     }
 
     @Test
+    fun recently_read_lists_what_was_read_here_and_scrolling_marks_nothing() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.refreshing) { !it }
+        for (t in 0L..400L step 16) vm.onVisible(frame(t, "b" to 0, "a" to 100))
+        vm.onVisible(frame(420, "a" to 0, firstIndex = 1))
+        settle(vm.read) { it == setOf("b") }
+
+        vm.select(StreamId.Read)
+
+        assertEquals(listOf("b"), ids(vm, listOf("b")))
+        settle(vm.refreshing) { !it }
+        vm.toggleRead("b")
+        settle(vm.read) { it.isEmpty() }
+        // b is unread again, and dwelling on it and scrolling it away leaves it that way
+        for (t in 0L..400L step 16) vm.onVisible(frame(t, "b" to 0))
+        vm.onVisible(frame(420, firstIndex = 1))
+        vm.markAllRead()
+        queue.awaitApplied()
+
+        assertEquals(emptySet<String>(), settle(vm.read) { it.isNotEmpty() })
+        assertTrue(db.queueDao().pendingAll().isEmpty())
+    }
+
+    @Test
     fun time_on_screen_in_another_list_does_not_count() = runTest(main, timeout = 30.seconds) {
         engine()
         seedServer()
@@ -514,10 +541,11 @@ class ListViewModelTest {
         val vm = vm()
         ids(vm, listOf("b", "a"))
 
-        val entries = settle(vm.picker) { it.size > 1 }
+        val entries = settle(vm.picker) { it.size > 2 }
 
         assertEquals(PickerEntry.All(2), entries.first())
-        assertEquals(PickerEntry.Folder("News", 2), entries[1])
+        assertEquals(PickerEntry.Recent, entries[1])
+        assertEquals(PickerEntry.Folder("News", 2), entries[2])
     }
 
     @Test
@@ -526,13 +554,13 @@ class ListViewModelTest {
         seedServer()
         val vm = vm()
         ids(vm, listOf("b", "a"))
-        settle(vm.picker) { it.size > 1 }
+        settle(vm.picker) { it.size > 2 }
 
         vm.toggleFolder("News")
         runCurrent()
         val folded = settle(vm.picker) { list -> list.none { it is PickerEntry.Feed } }
 
-        assertEquals(PickerEntry.Folder("News", 2, collapsed = true), folded[1])
+        assertEquals(PickerEntry.Folder("News", 2, collapsed = true), folded[2])
         assertEquals(setOf("News"), settings.collapsedFolders.first())
     }
 

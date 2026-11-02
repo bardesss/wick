@@ -25,6 +25,7 @@ import io.github.bardesss.wick.db.SnapshotRow
 import io.github.bardesss.wick.html.htmlToAnnotated
 import io.github.bardesss.wick.html.leadImageUrl
 import io.github.bardesss.wick.sync.MarkQueue
+import io.github.bardesss.wick.sync.Refreshed
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.ui.picker.PickerEntry
 import io.github.bardesss.wick.ui.picker.buildPicker
@@ -46,6 +47,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
@@ -138,7 +140,7 @@ class ListViewModel(
     /** The folder or feed name, or null for the whole account. */
     val viewName: StateFlow<String?> = combine(_view, feedDao.all()) { v, feeds ->
         when (v) {
-            StreamId.All -> null
+            StreamId.All, StreamId.Read -> null
             is StreamId.Folder -> v.name
             is StreamId.Feed -> feeds.firstOrNull { it.id == v.id }?.title.orEmpty()
         }
@@ -183,7 +185,7 @@ class ListViewModel(
             feedDao.all().filter { it.isNotEmpty() }.collect { feeds ->
                 val v = _view.value
                 val missing = when (v) {
-                    StreamId.All -> false
+                    StreamId.All, StreamId.Read -> false
                     is StreamId.Folder -> feeds.none { it.folder == v.name }
                     is StreamId.Feed -> feeds.none { it.id == v.id }
                 }
@@ -201,6 +203,12 @@ class ListViewModel(
             val stored = snapshotDao.snapshotIds().first()
             // a fresh start always refreshes; a restored one only when the list is old
             if (!restored || isStale()) startRefresh(indicator = stored.isEmpty())
+        }
+        // a new length for the recently read view shows at once when that view is up
+        viewModelScope.launch {
+            settings.recentCount.distinctUntilChanged().drop(1).collect {
+                if (_view.value == StreamId.Read) replaceSnapshot(storedIds(StreamId.Read), clock(), StreamId.Read)
+            }
         }
     }
 
@@ -222,8 +230,7 @@ class ListViewModel(
         appScope.launch { settings.setLastView(view.raw) }
         viewModelScope.launch {
             // show what is stored for the view at once; the refresh then brings it up to date
-            val feedIds = view.feedIds(feedDao.feedsNow())
-            replaceSnapshot(itemDao.unreadIds(feedIds, settings.oldestFirst.first()), writtenAtMs = 0, view)
+            replaceSnapshot(storedIds(view), writtenAtMs = 0, view)
             startRefresh(indicator = true)
         }
     }
@@ -236,6 +243,7 @@ class ListViewModel(
     fun markAllRead() {
         val v = _view.value
         val loaded = rows.value
+        if (v == StreamId.Read) return
         if (loaded.isNullOrEmpty() && count.value <= 0) return
         viewModelScope.launch {
             val feedIds = v.feedIds(feedDao.feedsNow())
@@ -252,6 +260,8 @@ class ListViewModel(
     fun onVisible(frame: ListFrame): Boolean {
         // the snapshot is being swapped; keep the frames coming so tracking resumes right after
         if (applying) return true
+        // read items are what this view is for, so scrolling marks nothing
+        if (_view.value == StreamId.Read) return false
         // Time on screen belongs to the list it was earned in. The old list stays up for a few
         // frames after the swap and may hold the same items, and the new one jumps into place
         // before it settles, so start over on the first frame of a different list.
@@ -338,7 +348,7 @@ class ListViewModel(
                     val result = try {
                         // marks made just before, say right before a view switch, must be in Room first
                         queue.awaitApplied()
-                        sync.refresh(v, settings.oldestFirst.first())
+                        if (v == StreamId.Read) refreshRead() else sync.refresh(v, settings.oldestFirst.first())
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -370,6 +380,26 @@ class ListViewModel(
             }
         }
     }
+
+    /**
+     * Brings the counts and unread items up to date, then lists what was read here last. The list
+     * comes from the phone, so it is there even when the server is not.
+     */
+    private suspend fun refreshRead(): Result<Refreshed> {
+        val synced = sync.backgroundSync()
+        val ids = storedIds(StreamId.Read)
+        return synced.map { Refreshed(ids, capped = false, marksStuck = false) }.onFailure {
+            if (_view.value == StreamId.Read) replaceSnapshot(ids, clock(), StreamId.Read)
+        }
+    }
+
+    /** What the database holds for [view], for a list to show before the server answers. */
+    private suspend fun storedIds(view: StreamId): List<String> =
+        if (view == StreamId.Read) {
+            itemDao.recentlyRead(settings.recentCount.first())
+        } else {
+            itemDao.unreadIds(view.feedIds(feedDao.feedsNow()), settings.oldestFirst.first())
+        }
 
     /** Swaps the snapshot with scroll marking paused. On failure the old list stays. */
     private suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long, view: StreamId) {

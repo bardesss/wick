@@ -120,6 +120,10 @@ private fun SettingsRoute(container: AppContainer, server: String, onSignOut: ()
         .collectAsStateWithLifecycle(initialValue = null)
     val linkTarget by remember { container.settings.linkTarget.map<LinkTarget, LinkTarget?> { it } }
         .collectAsStateWithLifecycle(initialValue = null)
+    val syncMinutes by remember { container.settings.syncMinutes.map<Int, Int?> { it } }
+        .collectAsStateWithLifecycle(initialValue = null)
+    val recentCount by remember { container.settings.recentCount.map<Int, Int?> { it } }
+        .collectAsStateWithLifecycle(initialValue = null)
     // the app scope, so sign out finishes even after this page has left the screen
     val scope = container.appScope
     SettingsScreen(
@@ -135,5 +139,9 @@ private fun SettingsRoute(container: AppContainer, server: String, onSignOut: ()
         onHaptics = { scope.launch { container.settings.setHaptics(it) } },
         onLinkTarget = { scope.launch { container.settings.setLinkTarget(it) } },
         onSignOut = onSignOut,
+        syncMinutes = syncMinutes,
+        recentCount = recentCount,
+        onSyncMinutes = { scope.launch { container.settings.setSyncMinutes(it) } },
+        onRecentCount = { scope.launch { container.settings.setRecentCount(it) } },
     )
 }

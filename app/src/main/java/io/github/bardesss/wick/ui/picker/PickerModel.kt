@@ -12,6 +12,11 @@ sealed interface PickerEntry {
 
     data class All(override val count: Int) : PickerEntry
 
+    /** The items read on this phone last; it counts nothing. */
+    data object Recent : PickerEntry {
+        override val count = 0
+    }
+
     data class Folder(val name: String, override val count: Int, val collapsed: Boolean = false) : PickerEntry
 
     data class Feed(
@@ -26,12 +31,13 @@ sealed interface PickerEntry {
 private val ByName = compareBy<String, String>(String.CASE_INSENSITIVE_ORDER) { it }
 
 /**
- * The drawer list: All, then each folder with its feeds under it, then the feeds that have no
+ * The drawer list: All, Recently read, then each folder with its feeds under it, then the feeds that have no
  * folder. Folders and feeds are in alphabetical order. [counts] is keyed by raw stream id.
  */
 fun buildPicker(feeds: List<FeedEntity>, counts: Map<String, Int>): List<PickerEntry> {
     val result = ArrayList<PickerEntry>(feeds.size + 8)
     result += PickerEntry.All(counts[StreamId.All.raw] ?: 0)
+    result += PickerEntry.Recent
     val byTitle = compareBy<FeedEntity, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
     val grouped = feeds.groupBy { it.folder }
     for (folder in grouped.keys.filterNotNull().sortedWith(ByName)) {
@@ -47,14 +53,14 @@ fun buildPicker(feeds: List<FeedEntity>, counts: Map<String, Int>): List<PickerE
 }
 
 /**
- * Leaves out the feeds with nothing unread and the folders whose total is zero. "All unread", the
+ * Leaves out the feeds with nothing unread and the folders whose total is zero. "All unread", "Recently read", the
  * [selected] view and the folder that holds a selected feed always stay.
  */
 fun withoutEmpty(entries: List<PickerEntry>, selected: StreamId): List<PickerEntry> {
     val selectedFolder = folderOfFeed(entries, selected)
     return entries.filter { e ->
         when (e) {
-            is PickerEntry.All -> true
+            is PickerEntry.All, PickerEntry.Recent -> true
             is PickerEntry.Folder -> e.count > 0 || selected == StreamId.Folder(e.name) || e.name == selectedFolder
             is PickerEntry.Feed -> e.count > 0 || selected == StreamId.Feed(e.id)
         }

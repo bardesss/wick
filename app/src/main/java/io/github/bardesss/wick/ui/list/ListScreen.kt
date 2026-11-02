@@ -86,6 +86,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
+import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.isWebUrl
 import io.github.bardesss.wick.ui.openLink
@@ -219,7 +220,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         },
         onMarkAll = {
             if (arm.tap(count > 0)) {
-                haptics.tick()
+                haptics.confirm()
                 vm.markAllRead()
                 scope.launch { drawerState.show(open = false, animate = !reducedMotion) }
             }
@@ -230,7 +231,11 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         },
     ) {
     ListContent(
-        viewName = name ?: stringResource(R.string.list_all_unread),
+        viewName = when {
+            view == StreamId.Read -> stringResource(R.string.list_recently_read)
+            else -> name ?: stringResource(R.string.list_all_unread)
+        },
+        history = view == StreamId.Read,
         count = count,
         message = message?.resolve(),
         capped = capped,
@@ -244,7 +249,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
         markArmed = arm.armed,
         onMarkAll = {
             if (arm.tap(count > 0)) {
-                haptics.tick()
+                haptics.confirm()
                 vm.markAllRead()
             }
         },
@@ -258,7 +263,7 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
             toast[0]?.cancel()
             toast[0] = scope.launch { snackbar.showSnackbar(if (nowRead) markedRead else markedUnread) }
         },
-        onSwipeTick = haptics::tick,
+        onSwipeTick = haptics::threshold,
         reducedMotion = reducedMotion,
         snackbar = snackbar,
     )
@@ -305,6 +310,8 @@ internal fun TopOnNewSnapshot(ids: List<String>?, listState: LazyListState) {
 @Composable
 fun ListContent(
     viewName: String,
+    /** True for the recently read view: no count, no mark all and no end of list to check from. */
+    history: Boolean = false,
     count: Int,
     message: String?,
     /** True when the list was cut at the item limit, so the server holds more than it shows. */
@@ -346,7 +353,7 @@ fun ListContent(
 
     Box(Modifier.fillMaxSize().background(WickColors.Night)) {
         Column(Modifier.fillMaxSize()) {
-            Header(viewName, count, animate = !reducedMotion, markArmed, onMarkAll, onOpenPicker)
+            Header(viewName, if (history) null else count, animate = !reducedMotion, markArmed, onMarkAll, onOpenPicker)
             if (message != null) {
                 Text(
                     message,
@@ -358,7 +365,7 @@ fun ListContent(
             val pull = rememberPullToRefreshState()
             val gap by remember(rows, count, capped) {
                 derivedStateOf {
-                    if (rows == null) 0 else newItems(count, rows.count { it.id !in read.value }, capped)
+                    if (rows == null || history) 0 else newItems(count, rows.count { it.id !in read.value }, capped)
                 }
             }
             val gapNow by rememberUpdatedState(gap)
@@ -454,8 +461,21 @@ fun ListContent(
                                 )
                             }
                         }
-                        item(key = FOOTER_KEY, contentType = "caught_up") {
-                            CaughtUp(onRefresh = onRefresh, refreshing = refreshing, modifier = Modifier.height(footerHeight))
+                        if (history) {
+                            if (rows.isEmpty()) {
+                                item(key = FOOTER_KEY, contentType = "history_empty") {
+                                    Text(
+                                        stringResource(R.string.list_recent_empty),
+                                        style = WickText.Note,
+                                        color = WickColors.Meta,
+                                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 16.dp),
+                                    )
+                                }
+                            }
+                        } else {
+                            item(key = FOOTER_KEY, contentType = "caught_up") {
+                                CaughtUp(onRefresh = onRefresh, refreshing = refreshing, modifier = Modifier.height(footerHeight))
+                            }
                         }
                     }
                 }
@@ -517,7 +537,8 @@ private fun NewItemsPill(count: Int, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 private fun Header(
     name: String,
-    count: Int,
+    /** Null for a view that counts nothing. */
+    count: Int?,
     animate: Boolean,
     markArmed: Boolean,
     onMarkAll: () -> Unit,
@@ -525,7 +546,7 @@ private fun Header(
 ) {
     val chooseView = stringResource(R.string.list_choose_view)
     var tick by remember { mutableStateOf(false) }
-    var shown by remember { mutableIntStateOf(count) }
+    var shown by remember { mutableStateOf(count) }
     LaunchedEffect(count) {
         if (count != shown) {
             shown = count
@@ -566,10 +587,12 @@ private fun Header(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.alignByBaseline().weight(1f, fill = false).semantics { heading() },
             )
-            Spacer(Modifier.width(10.dp))
-            Text(count.toString(), style = CountStyle, color = countColor, modifier = Modifier.alignByBaseline())
+            if (count != null) {
+                Spacer(Modifier.width(10.dp))
+                Text(count.toString(), style = CountStyle, color = countColor, modifier = Modifier.alignByBaseline())
+            }
         }
-        if (count > 0) {
+        if (count != null && count > 0) {
             Spacer(Modifier.width(4.dp))
             MarkAll(count, markArmed, animate, onMarkAll)
         }

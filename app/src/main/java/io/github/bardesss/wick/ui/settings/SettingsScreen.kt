@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import io.github.bardesss.wick.BuildConfig
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
+import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.ui.Wordmark
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.theme.InstrumentSans
@@ -77,6 +78,10 @@ fun SettingsScreen(
     onHaptics: (Boolean) -> Unit,
     onLinkTarget: (LinkTarget) -> Unit,
     onSignOut: () -> Unit,
+    syncMinutes: Int? = SettingsStore.SYNC_DEFAULT,
+    recentCount: Int? = SettingsStore.RECENT_DEFAULT,
+    onSyncMinutes: (Int) -> Unit = {},
+    onRecentCount: (Int) -> Unit = {},
     /** Only the snapshot tests set it, so the picture does not change with every release. */
     version: String = BuildConfig.VERSION_NAME,
 ) {
@@ -119,6 +124,18 @@ fun SettingsScreen(
                 second = stringResource(R.string.settings_links_default),
                 value = linkTarget?.let { it == LinkTarget.DefaultApp },
                 onChange = { onLinkTarget(if (it) LinkTarget.DefaultApp else LinkTarget.InApp) },
+            )
+            ChoiceRow(
+                label = stringResource(R.string.settings_sync),
+                choices = SettingsStore.SYNC_CHOICES.map { syncLabel(it) to it },
+                value = syncMinutes,
+                onChange = onSyncMinutes,
+            )
+            ChoiceRow(
+                label = stringResource(R.string.settings_recent),
+                choices = SettingsStore.RECENT_CHOICES.map { it.toString() to it },
+                value = recentCount,
+                onChange = onRecentCount,
             )
 
             Section(stringResource(R.string.settings_account)) {
@@ -201,21 +218,34 @@ private fun SwitchRow(label: String, checked: Boolean?, onChange: (Boolean) -> U
 }
 
 /** A setting with two choices, [first] for false and [second] for true, as a pair of segments. */
+@Composable
+private fun TwoChoiceRow(label: String, first: String, second: String, value: Boolean?, onChange: (Boolean) -> Unit) =
+    ChoiceRow(label, listOf(first to false, second to true), value, onChange)
+
+/** How a sync interval reads on its segment, in the short form the list uses for ages. */
+@Composable
+private fun syncLabel(minutes: Int): String = when {
+    minutes == 0 -> stringResource(R.string.settings_sync_off)
+    minutes % 60 == 0 -> stringResource(R.string.age_hours, minutes / 60)
+    else -> stringResource(R.string.age_minutes, minutes)
+}
+
+/** A setting with a few [choices], each a label and its value, as a row of segments. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TwoChoiceRow(label: String, first: String, second: String, value: Boolean?, onChange: (Boolean) -> Unit) {
+private fun <T> ChoiceRow(label: String, choices: List<Pair<String, T>>, value: T?, onChange: (T) -> Unit) {
     // the segments sit beside the label, or below it when both do not fit on one line
     Layout(
         modifier = Modifier.fillMaxWidth(),
         content = {
             Text(label, style = RowStyle, color = WickColors.Paper)
             SingleChoiceSegmentedButtonRow {
-                listOf(first to false, second to true).forEachIndexed { index, (text, choice) ->
+                choices.forEachIndexed { index, (text, choice) ->
                     SegmentedButton(
                         selected = value == choice,
                         onClick = { onChange(choice) },
                         enabled = value != null,
-                        shape = SegmentedButtonDefaults.itemShape(index, count = 2),
+                        shape = SegmentedButtonDefaults.itemShape(index, count = choices.size),
                         colors = SegmentColors,
                         contentPadding = SegmentPadding,
                         // the colour says which is chosen; a check mark would only make it wider
