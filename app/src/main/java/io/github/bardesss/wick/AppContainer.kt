@@ -69,7 +69,13 @@ class AppContainer(val context: Context) {
     val syncEngine: SyncEngine by lazy { SyncEngine(api, db, markQueue) }
 
     val accountSwitch: AccountSwitch by lazy {
-        AccountSwitch(settings) { wipeAccount(markQueue, db, settings, clearImages = ::clearImages) }
+        AccountSwitch(
+            settings,
+            hasData = {
+                feedDao.feedsNow().isNotEmpty() || itemDao.any() ||
+                    queueDao.pending().isNotEmpty() || queueDao.pendingAll().isNotEmpty()
+            },
+        ) { wipeAccount(markQueue, db, settings, clearImages = ::clearImages) }
     }
 
     /** The view shown last time, read for each session so the first frame can have the right header. */

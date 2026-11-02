@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -131,6 +132,38 @@ class SignOutTest {
 
         assertEquals(listOf("a"), db.queueDao().pending().map { it.itemId })
         assertEquals(1, db.feedDao().feedsNow().size)
+    }
+
+    @Test
+    fun no_recorded_account_with_stored_data_wipes_before_the_new_account() = runTest(timeout = 30.seconds) {
+        seed()
+        val queue = db.newQueue(api, backgroundScope)
+        queue.mark("a", read = true, manual = false)
+        queue.awaitApplied()
+        val switch = AccountSwitch(
+            settings,
+            hasData = { db.feedDao().feedsNow().isNotEmpty() || db.itemDao().any() || db.queueDao().pending().isNotEmpty() },
+        ) { wipeAccount(queue, db, settings) {} }
+
+        switch.enter("https://feeds.example.com\nme")
+
+        assertTrue(db.queueDao().pending().isEmpty())
+        assertTrue(db.feedDao().feedsNow().isEmpty())
+        assertEquals("https://feeds.example.com\nme", settings.account())
+    }
+
+    @Test
+    fun no_recorded_account_and_an_empty_database_does_not_wipe() = runTest(timeout = 30.seconds) {
+        val queue = db.newQueue(api, backgroundScope)
+        var wiped = false
+        val switch = AccountSwitch(settings, hasData = { db.itemDao().any() }) {
+            wiped = true
+            wipeAccount(queue, db, settings) {}
+        }
+
+        switch.enter("https://feeds.example.com\nme")
+
+        assertFalse(wiped)
     }
 
     @Test

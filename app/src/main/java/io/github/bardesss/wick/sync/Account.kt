@@ -36,15 +36,22 @@ suspend fun wipeAccount(
 /**
  * Tells a new key for the account that is already here from a different account. Another
  * account's data and queued marks are wiped before its credentials are saved; the same account
- * keeps everything, so marks made before a rejected key are sent with the new one.
+ * keeps everything, so marks made before a rejected key are sent with the new one. With no
+ * account recorded, anything stored still belongs to someone, so it goes too.
  */
 class AccountSwitch(
     private val settings: SettingsStore,
+    /** True when the local copy holds feeds, items or queued marks. */
+    private val hasData: suspend () -> Boolean = { false },
     private val wipe: suspend () -> Unit,
 ) {
     suspend fun enter(id: String) {
         val previous = settings.account()
-        if (previous != null && previous != id) wipe()
+        if (previous == null) {
+            if (hasData()) wipe()
+        } else if (previous != id) {
+            wipe()
+        }
         settings.setAccount(id)
     }
 }
