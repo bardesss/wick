@@ -143,6 +143,26 @@ class ScreenSnapshots {
     }
 
     @Test
+    fun list_search() = snap("list_search") {
+        ListContent(
+            viewName = "Recently read",
+            history = true,
+            count = 0,
+            message = null,
+            rows = sample,
+            read = remember { mutableStateOf(sample.map { it.id }.toSet()) },
+            nowSec = now,
+            refreshing = false,
+            listState = rememberLazyListState(),
+            onRefresh = {},
+            onOpenPicker = {},
+            onOpen = {},
+            onFrame = { false },
+            searchPreview = "news",
+        )
+    }
+
+    @Test
     fun list_armed() = snap("list_armed") {
         ListContent(
             viewName = "All unread",
