@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.room.Room
 import androidx.room.withTransaction
 import coil3.ImageLoader
-import coil3.svg.SvgDecoder
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -22,6 +21,7 @@ import io.github.bardesss.wick.sync.AccountSwitch
 import io.github.bardesss.wick.sync.MarkQueue
 import io.github.bardesss.wick.sync.SyncEngine
 import io.github.bardesss.wick.sync.wipeAccount
+import io.github.bardesss.wick.ui.SvgIconDecoder
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -108,7 +108,7 @@ fun buildImageLoader(context: Context, client: OkHttpClient, diskDir: File): Ima
         .components {
             add(OkHttpNetworkFetcherFactory(callFactory = { client }))
             // plenty of sites ship only an svg icon, and the server passes it on as it is
-            add(SvgDecoder.Factory())
+            add(SvgIconDecoder.Factory())
         }
         .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.05).build() }
         .diskCache {
