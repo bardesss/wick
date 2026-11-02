@@ -330,11 +330,12 @@ fun ListContent(
     swipePreview: Map<String, Float> = emptyMap(),
 ) {
     val frameSink by rememberUpdatedState(onFrame)
+    val shownRows by rememberUpdatedState(rows)
     LaunchedEffect(listState) {
         // every layout change, then every frame while a row on screen still needs dwell time
         snapshotFlow { listState.layoutInfo }.collectLatest {
             do {
-                val more = withFrameMillis { t -> frameSink(listState.layoutInfo.toFrame(t)) }
+                val more = withFrameMillis { t -> frameSink(listState.layoutInfo.toFrame(t, shownRows)) }
             } while (more)
         }
     }
@@ -620,11 +621,11 @@ private fun MarkAll(count: Int, armed: Boolean, animate: Boolean, onClick: () ->
     }
 }
 
-private fun LazyListLayoutInfo.toFrame(nowMs: Long): ListFrame {
+private fun LazyListLayoutInfo.toFrame(nowMs: Long, shown: List<RowModel>?): ListFrame {
     val items = ArrayList<FrameItem>(visibleItemsInfo.size)
     for (info in visibleItemsInfo) {
         val id = info.key as? String ?: continue
         items += FrameItem(id, info.index, info.offset, info.size)
     }
-    return ListFrame(nowMs, viewportStartOffset, viewportEndOffset, items)
+    return ListFrame(nowMs, viewportStartOffset, viewportEndOffset, items, shown)
 }

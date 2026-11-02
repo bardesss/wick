@@ -312,12 +312,13 @@ class ListViewModelTest {
         assertEquals(listOf("c", "b", "a"), ids(vm, listOf("c", "b", "a")))
     }
 
-    private fun frame(t: Long, vararg rows: Pair<String, Int>, firstIndex: Int = 0): ListFrame =
+    private fun frame(t: Long, vararg rows: Pair<String, Int>, firstIndex: Int = 0, shown: Any? = null): ListFrame =
         ListFrame(
             nowMs = t,
             viewportStart = 0,
             viewportEnd = 800,
             items = rows.mapIndexed { n, (id, offset) -> FrameItem(id, firstIndex + n, offset, 100) },
+            shown = shown,
         )
 
     @Test
@@ -333,6 +334,26 @@ class ListViewModelTest {
         vm.onVisible(frame(420, "a" to 0, firstIndex = 1))
 
         assertEquals(setOf("b"), settle(vm.read) { it == setOf("b") })
+    }
+
+    @Test
+    fun time_on_screen_in_another_list_does_not_count() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        val vm = vm()
+        ids(vm, listOf("b", "a"))
+        settle(vm.refreshing) { !it }
+
+        // b and a earn their time in one list, say all unread
+        val before = Any()
+        for (t in 0L..400L step 16) vm.onVisible(frame(t, "b" to 0, "a" to 100, shown = before))
+        // a feed holding the same items opens, and while it jumps into place b passes the top
+        val after = Any()
+        vm.onVisible(frame(420, "b" to 0, "a" to 100, shown = after))
+        vm.onVisible(frame(436, "a" to 0, firstIndex = 1, shown = after))
+        runCurrent()
+
+        assertEquals(emptySet<String>(), settle(vm.read) { it.isNotEmpty() })
     }
 
     @Test

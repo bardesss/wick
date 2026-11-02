@@ -97,6 +97,7 @@ class ListViewModel(
 
     private val tracker = SeenTracker()
     private var lastFrameIndex = HashMap<String, Int>()
+    private var lastShown: Any? = null
     private var busy = false
     private var again = false
     private var applying = false
@@ -251,6 +252,15 @@ class ListViewModel(
     fun onVisible(frame: ListFrame): Boolean {
         // the snapshot is being swapped; keep the frames coming so tracking resumes right after
         if (applying) return true
+        // Time on screen belongs to the list it was earned in. The old list stays up for a few
+        // frames after the swap and may hold the same items, and the new one jumps into place
+        // before it settles, so start over on the first frame of a different list.
+        if (frame.shown !== lastShown) {
+            lastShown = frame.shown
+            tracker.reset()
+            lastFrameIndex = HashMap()
+            return true
+        }
         val readNow = read.value
         val current = HashMap<String, Int>(frame.items.size * 2)
         val visible = ArrayList<Visibility>(frame.items.size + 4)

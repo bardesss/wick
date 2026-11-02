@@ -6,7 +6,14 @@ data class Visibility(val id: String, val fraction: Float, val offTop: Boolean)
 /** A row as the list laid it out in one frame. Offsets are in the list's viewport coordinates. */
 data class FrameItem(val id: String, val index: Int, val offset: Int, val size: Int)
 
-data class ListFrame(val nowMs: Long, val viewportStart: Int, val viewportEnd: Int, val items: List<FrameItem>)
+/** [shown] is the row list the screen was drawing, compared by identity to tell one list from the next. */
+class ListFrame(
+    val nowMs: Long,
+    val viewportStart: Int,
+    val viewportEnd: Int,
+    val items: List<FrameItem>,
+    val shown: Any? = null,
+)
 
 /**
  * Decides which rows were seen. A row earns visible time while at least [minVisibleFraction]
