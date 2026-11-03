@@ -12,7 +12,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -53,7 +52,16 @@ fun resolveIcon(server: String, iconUrl: String?): String? {
 }
 
 private val TileShape = RoundedCornerShape(6.dp)
-private val Greyscale = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+private const val FADED_ALPHA = 0.3f
+
+// Grey and see-through in one filter. A separate alpha layer, added and dropped with the read
+// state, stayed behind on some unread rows on a device and left their icons dim.
+private val Faded = ColorFilter.colorMatrix(
+    ColorMatrix().apply {
+        setToSaturation(0f)
+        this[3, 3] = FADED_ALPHA
+    },
+)
 private val LetterStyle = TextStyle(
     fontFamily = InstrumentSans,
     fontWeight = FontWeight.SemiBold,
@@ -71,16 +79,15 @@ fun Favicon(
     tile: Color = WickColors.Raised,
 ) {
     var loaded by remember(url) { mutableStateOf(false) }
-    Box(
-        modifier
-            .size(20.dp)
-            .alpha(if (faded) FADED_ALPHA else 1f)
-            .clip(TileShape),
-        contentAlignment = Alignment.Center,
-    ) {
+    val fade = if (faded) FADED_ALPHA else 1f
+    Box(modifier.size(20.dp).clip(TileShape), contentAlignment = Alignment.Center) {
         if (!loaded) {
-            Box(Modifier.size(20.dp).background(tile), contentAlignment = Alignment.Center) {
-                Text(title.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "", style = LetterStyle)
+            Box(Modifier.size(20.dp).background(tile.copy(alpha = tile.alpha * fade)), contentAlignment = Alignment.Center) {
+                Text(
+                    title.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "",
+                    style = LetterStyle,
+                    color = WickColors.Meta.copy(alpha = fade),
+                )
             }
         }
         if (url != null) {
@@ -88,12 +95,10 @@ fun Favicon(
                 model = url,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                colorFilter = if (faded) Greyscale else null,
+                colorFilter = if (faded) Faded else null,
                 onState = { loaded = it is AsyncImagePainter.State.Success },
                 modifier = Modifier.size(20.dp),
             )
         }
     }
 }
-
-private const val FADED_ALPHA = 0.3f
