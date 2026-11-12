@@ -81,9 +81,9 @@ class GReaderApiTest {
     }
 
     @Test
-    fun login_403_is_Forbidden() {
-        server.enqueue(MockResponse().setResponseCode(403))
-        expectError(ApiError.Forbidden) { api.login(serverUrl(), "u", "k") }
+    fun login_403_is_BadCredentials() {
+        server.enqueue(MockResponse().setResponseCode(403).setBody("Error=BadAuthentication"))
+        expectError(ApiError.BadCredentials) { api.login(serverUrl(), "u", "k") }
     }
 
     @Test
