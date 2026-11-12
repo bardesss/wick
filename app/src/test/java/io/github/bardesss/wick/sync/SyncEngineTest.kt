@@ -10,7 +10,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -259,10 +258,21 @@ class SyncEngineTest {
         api.stuckContinuation = "c"
         val engine = engine()
 
-        val result = withTimeout(5_000) { engine.refresh(StreamId.All, oldestFirst = false).getOrThrow() }
+        val result = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
 
         assertTrue(result.capped)
         assertTrue(api.unreadCalls <= 2)
+    }
+
+    @Test
+    fun refresh_stops_when_continuation_repeats_with_new_items() = runTest {
+        api.fixedContinuationWithFreshItems = "c"
+        val engine = engine()
+
+        val result = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+
+        assertTrue(result.capped)
+        assertEquals(2, api.unreadCalls)
     }
 
     @Test

@@ -24,6 +24,9 @@ class FakeReaderApi : ReaderApi {
     /** When set, every unread page carries this continuation and restarts from the top, like a stuck server. */
     var stuckContinuation: String? = null
 
+    /** When set, every unread page holds new ids but carries this same continuation. */
+    var fixedContinuationWithFreshItems: String? = null
+
     var unreadCalls = 0
         private set
 
@@ -90,6 +93,12 @@ class FakeReaderApi : ReaderApi {
     override suspend fun unread(stream: StreamId, oldestFirst: Boolean, max: Int, continuation: String?): Page {
         unreadCalls++
         check()
+        val fresh = fixedContinuationWithFreshItems
+        if (fresh != null) {
+            check(unreadCalls <= 20) { "pager did not stop" }
+            val items = (0 until 2).map { Item("fresh$unreadCalls-$it", "feed/1", "Title", null, 1L, null) }
+            return Page(items, fresh)
+        }
         beforeUnread?.invoke()
         val sorted = serverItems.values
             .filter { it.id !in readIds && inStream(it, stream) }
@@ -103,7 +112,10 @@ class FakeReaderApi : ReaderApi {
         val stuck = stuckContinuation
         val start = if (stuck != null) 0 else continuation?.toInt() ?: 0
         val end = minOf(start + max, sorted.size)
-        if (stuck != null) return Page(sorted.subList(start, end), stuck)
+        if (stuck != null) {
+            check(unreadCalls <= 20) { "pager did not stop" }
+            return Page(sorted.subList(start, end), stuck)
+        }
         return Page(sorted.subList(start, end), if (end < sorted.size) end.toString() else null)
     }
 
