@@ -238,6 +238,33 @@ class GReaderApiTest {
         assertTrue(server.takeRequest().body.readUtf8().contains("T=new"))
     }
 
+    private fun assertEditRetriedWithNewToken(code: Int) {
+        server.enqueue(MockResponse().setBody("T1"))
+        server.enqueue(MockResponse().setResponseCode(code))
+        server.enqueue(MockResponse().setBody("T2"))
+        server.enqueue(MockResponse().setBody("OK"))
+        runBlocking { api.setRead(listOf("id1"), true) }
+        repeat(3) { server.takeRequest() }
+        assertTrue(server.takeRequest().body.readUtf8().contains("T=T2"))
+        assertEquals(4, server.requestCount)
+    }
+
+    @Test
+    fun edit_403_fetches_a_new_token_once() = assertEditRetriedWithNewToken(403)
+
+    @Test
+    fun edit_400_fetches_a_new_token_once() = assertEditRetriedWithNewToken(400)
+
+    @Test
+    fun edit_403_twice_is_Forbidden() {
+        server.enqueue(MockResponse().setBody("T1"))
+        server.enqueue(MockResponse().setResponseCode(403))
+        server.enqueue(MockResponse().setBody("T2"))
+        server.enqueue(MockResponse().setResponseCode(403))
+        expectError(ApiError.Forbidden) { api.setRead(listOf("id1"), true) }
+        assertEquals(4, server.requestCount)
+    }
+
     @Test
     fun non_json_200_body_is_Malformed() {
         server.enqueue(MockResponse().setBody("<html>proxy login</html>"))
