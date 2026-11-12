@@ -276,6 +276,18 @@ class MarkQueueTest {
     }
 
     @Test
+    fun mark_all_rate_limited_stays_queued() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.markAll(StreamId.Feed("feed/1"), listOf("feed/1"), 100)
+        runCurrent()
+
+        api.failNext(1, ApiError.Http(429))
+        assertFalse(q.flush())
+        assertEquals(1, db.queueDao().pendingAll().size)
+    }
+
+    @Test
     fun flush_batches_by_100() = runTest {
         val ids = (1..250).map { "i%03d".format(it) }
         seed(*ids.toTypedArray())

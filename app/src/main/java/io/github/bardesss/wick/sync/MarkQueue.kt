@@ -131,7 +131,7 @@ class MarkQueue(
                 queueDao.completeMarkAll(m)
             } catch (e: ApiError) {
                 if (e.stopsFlush()) return false
-                if (e is ApiError.Http && e.code in 400..499) {
+                if (e is ApiError.Http && e.code in 400..499 && e.code != 408 && e.code != 429) {
                     // the server will never accept it; keeping it would hold back every item mark
                     Log.w(LOG_TAG, "dropping a mark all the server rejected with ${e.code}")
                     queueDao.deleteAll(m.id)
