@@ -21,6 +21,12 @@ class FakeReaderApi : ReaderApi {
     val setReadCalls = mutableListOf<Pair<List<String>, Boolean>>()
     val markAllCalls = mutableListOf<Pair<String, Long>>()
 
+    /** When set, every unread page carries this continuation and restarts from the top, like a stuck server. */
+    var stuckContinuation: String? = null
+
+    var unreadCalls = 0
+        private set
+
     /** Runs inside setRead before the change is applied, so a test can pause a request. */
     var beforeSetRead: (suspend () -> Unit)? = null
 
@@ -82,6 +88,7 @@ class FakeReaderApi : ReaderApi {
     }
 
     override suspend fun unread(stream: StreamId, oldestFirst: Boolean, max: Int, continuation: String?): Page {
+        unreadCalls++
         check()
         beforeUnread?.invoke()
         val sorted = serverItems.values
@@ -93,8 +100,10 @@ class FakeReaderApi : ReaderApi {
                     compareByDescending<Item> { it.publishedSec }.thenBy { it.id }
                 },
             )
-        val start = continuation?.toInt() ?: 0
+        val stuck = stuckContinuation
+        val start = if (stuck != null) 0 else continuation?.toInt() ?: 0
         val end = minOf(start + max, sorted.size)
+        if (stuck != null) return Page(sorted.subList(start, end), stuck)
         return Page(sorted.subList(start, end), if (end < sorted.size) end.toString() else null)
     }
 
