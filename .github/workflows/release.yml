@@ -43,7 +43,12 @@ jobs:
           if [ "$EVENT" = "workflow_dispatch" ]; then
             tag="v$INPUT_VERSION"
           else
-            tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+            tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main) || exit 1
+            tip=${tip%%[[:space:]]*}
+            if [ -z "$tip" ]; then
+              echo "Could not read the tip of main"
+              exit 1
+            fi
             if [ "$tip" != "$GITHUB_SHA" ]; then
               echo "A newer push releases this"
               exit 0

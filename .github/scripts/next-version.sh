@@ -9,6 +9,7 @@ bump=none
 
 while IFS= read -r title || [ -n "$title" ]; do
   case "$title" in
+    "") continue ;;
     *"[skip release]"*) continue ;;
     *"[major]"*) bump=major ;;
     *"[minor]"*) [ "$bump" = major ] || bump=minor ;;
