@@ -1,5 +1,6 @@
 # Android / Gradle
 .gradle/
+.kotlin/
 build/
 local.properties
 captures/
@@ -12,6 +13,10 @@ captures/
 *.jks
 *.keystore
 keystore.properties
+*.b64
+*.p12
+*.pem
+.env
 
 # IDE
 .idea/
