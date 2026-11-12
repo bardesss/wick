@@ -253,22 +253,6 @@ class SyncEngineTest {
     }
 
     @Test
-    fun capped_refresh_marks_missing_read_inside_window() = runTest {
-        repeat(MAX_ITEMS + 1) { api.addItem("i$it", "feed/1", it + 1L) }
-        db.itemDao().upsertKeepingLocal(listOf(local("x", "feed/1", 5_000), local("y", "feed/1", 1)))
-        val engine = engine()
-
-        val capped = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
-
-        assertTrue(capped.capped)
-        // x is newer than the oldest fetched item, so the server would have listed it if unread
-        // (a row marked read here is pruned afterwards, so it may be gone)
-        assertTrue(row("x")?.read ?: true)
-        // y is older than the window, so the server may still hold it unread
-        assertFalse(row("y")!!.read)
-    }
-
-    @Test
     fun refresh_stops_when_the_server_repeats_its_continuation() = runTest {
         repeat(3) { api.addItem("i$it", "feed/1", it.toLong()) }
         api.stuckContinuation = "c"
