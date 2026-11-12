@@ -102,6 +102,9 @@ abstract class ItemDao {
     @Query("SELECT id, feedId FROM ItemEntity WHERE id IN (:ids)")
     protected abstract suspend fun feedIdsChunk(ids: List<String>): List<ItemFeed>
 
+    @Query("SELECT id FROM ItemEntity WHERE id IN (:ids) AND publishedSec BETWEEN :from AND :to")
+    protected abstract suspend fun idsPublishedBetween(ids: List<String>, from: Long, to: Long): List<String>
+
     @Query("UPDATE ItemEntity SET read = 1, manualUnread = 0 WHERE id IN (:ids)")
     protected abstract suspend fun markReadByIds(ids: List<String>)
 
@@ -120,10 +123,18 @@ abstract class ItemDao {
     suspend fun feedIdsOf(ids: List<String>): Map<String, String> =
         ids.chunked(CHUNK).flatMap { feedIdsChunk(it) }.associate { it.id to it.feedId }
 
-    /** Marks local unread rows of [feedIds] (all feeds when null) read unless they are in [keep] or have a pending mark. */
+    /**
+     * Marks local unread rows of [feedIds] (all feeds when null) read unless they are in [keep] or have a
+     * pending mark. With [publishedWithin] only rows published in that range count, for a capped fetch.
+     */
     @Transaction
-    open suspend fun markMissingRead(feedIds: List<String>?, keep: Set<String>) {
-        val candidates = unreadIds(feedIds, oldestFirst = false).filter { it !in keep }
+    open suspend fun markMissingRead(feedIds: List<String>?, keep: Set<String>, publishedWithin: LongRange? = null) {
+        var candidates = unreadIds(feedIds, oldestFirst = false).filter { it !in keep }
+        if (publishedWithin != null) {
+            candidates = candidates.chunked(CHUNK).flatMap {
+                idsPublishedBetween(it, publishedWithin.first, publishedWithin.last)
+            }
+        }
         val pending = candidates.chunked(CHUNK).flatMap { pendingAmong(it) }.toSet()
         candidates.filter { it !in pending }.chunked(CHUNK).forEach { markReadByIds(it) }
     }

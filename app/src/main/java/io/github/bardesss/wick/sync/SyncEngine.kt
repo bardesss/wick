@@ -25,6 +25,11 @@ private class Fetched(
     val items: List<Item>,
     /** False when the item cap cut the listing short. */
     val complete: Boolean,
+    /**
+     * Null when complete. When capped, the publish times the fetched items prove: anything unread
+     * on the server inside it would have been listed.
+     */
+    val window: LongRange?,
 )
 
 /**
@@ -59,6 +64,8 @@ class SyncEngine(
                 val read = db.itemDao().readAmong(ids)
                 if (fetched.complete) {
                     db.itemDao().markMissingRead(view.feedIds(fetched.feeds), ids.toSet())
+                } else if (fetched.window != null) {
+                    db.itemDao().markMissingRead(view.feedIds(fetched.feeds), ids.toSet(), fetched.window)
                 }
                 db.itemDao().clearManualUnread()
                 db.itemDao().pruneReadNotIn(ids.toSet())
@@ -132,7 +139,15 @@ class SyncEngine(
             continuation = page.continuation
         } while (continuation != null && !stalled && items.size < MAX_ITEMS)
         val list = items.values.toList().take(MAX_ITEMS)
-        return Fetched(feeds, counts, list, complete = continuation == null)
+        val complete = continuation == null
+        val window = if (complete || list.isEmpty()) {
+            null
+        } else if (oldestFirst) {
+            Long.MIN_VALUE..(list.maxOf { it.publishedSec } - 1)
+        } else {
+            (list.minOf { it.publishedSec } + 1)..Long.MAX_VALUE
+        }
+        return Fetched(feeds, counts, list, complete, window)
     }
 
     private suspend fun store(f: Fetched) {
