@@ -89,7 +89,7 @@ abstract class QueueDao {
 
     /**
      * A mark that reverses a pending one cancels it, otherwise the newest mark replaces the old
-     * one. A pending mark that is being sent right now ([inFlight]) or was sent before (attempted)
+     * one. A pending mark that is being sent right now ([inFlight]) or a send of it has started (attempted)
      * is never cancelled, because the server may already have it.
      */
     @Transaction

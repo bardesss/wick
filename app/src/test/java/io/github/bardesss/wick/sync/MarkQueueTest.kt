@@ -171,6 +171,22 @@ class MarkQueueTest {
     }
 
     @Test
+    fun requeued_mark_stays_flagged_after_uncertain_send() = runTest {
+        seed("a")
+        val q = queue()
+        q.mark("a", read = true, manual = false)
+        runCurrent()
+        api.failNextAfterApplying(1)
+        assertFalse(q.flush())
+        q.mark("a", read = true, manual = false)
+        runCurrent()
+        q.mark("a", read = false, manual = true)
+        runCurrent()
+        assertTrue(q.flush())
+        assertFalse(api.isRead("a"))
+    }
+
+    @Test
     fun reversal_cancels_pending_mark() = runTest {
         seed("a")
         val q = queue()
