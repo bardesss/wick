@@ -250,6 +250,32 @@ class MarkQueueTest {
     }
 
     @Test
+    fun mark_all_rejected_with_4xx_is_dropped_and_item_marks_flow() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.markAll(StreamId.Feed("feed/1"), listOf("feed/1"), 100)
+        q.mark("b", read = false, manual = true)
+        runCurrent()
+
+        api.failNext(1, ApiError.Http(404))
+        assertTrue(q.flush())
+        assertTrue(db.queueDao().pendingAll().isEmpty())
+        assertFalse(api.isRead("b"))
+    }
+
+    @Test
+    fun mark_all_failing_with_5xx_stays_queued() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.markAll(StreamId.Feed("feed/1"), listOf("feed/1"), 100)
+        runCurrent()
+
+        api.failNext(1, ApiError.Http(503))
+        assertFalse(q.flush())
+        assertEquals(1, db.queueDao().pendingAll().size)
+    }
+
+    @Test
     fun flush_batches_by_100() = runTest {
         val ids = (1..250).map { "i%03d".format(it) }
         seed(*ids.toTypedArray())
