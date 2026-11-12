@@ -1,7 +1,8 @@
 name: Release
 
 # Every push to main ships a release. The version is the latest v* tag plus one patch.
-# Put [minor] or [major] in the PR title for a bigger bump, or [skip release] to ship nothing.
+# Every commit since that tag counts: [minor] or [major] in a PR title makes a bigger bump, and
+# [skip release] on every one of them ships nothing.
 on:
   push:
     branches: [main]
@@ -31,35 +32,34 @@ jobs:
       EVENT: ${{ github.event_name }}
       MESSAGE: ${{ github.event.head_commit.message }}
       INPUT_VERSION: ${{ inputs.versionName }}
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
       - name: Work out the version
         id: next
         run: |
           if [ "$EVENT" = "workflow_dispatch" ]; then
             tag="v$INPUT_VERSION"
           else
-            title=$(printf '%s\n' "$MESSAGE" | head -n 1)
-            case "$title" in
-              *"[skip release]"*)
-                echo "Skipped by [skip release]"
-                exit 0
-                ;;
-            esac
+            tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+            if [ "$tip" != "$GITHUB_SHA" ]; then
+              echo "A newer push releases this"
+              exit 0
+            fi
             latest=$(git ls-remote --tags --refs "https://github.com/$GITHUB_REPOSITORY" 'v*' \
               | sed 's|.*refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
             if [ -z "$latest" ]; then
-              tag="v0.1.0"
+              titles=$(printf '%s\n' "$MESSAGE" | head -n 1)
             else
-              IFS=. read -r major minor patch <<< "${latest#v}"
-              case "$title" in
-                *"[major]"*) major=$((major + 1)); minor=0; patch=0 ;;
-                *"[minor]"*) minor=$((minor + 1)); patch=0 ;;
-                *) patch=$((patch + 1)) ;;
-              esac
-              # versionCode allows at most 99 for minor and patch
-              if [ "$patch" -gt 99 ]; then minor=$((minor + 1)); patch=0; fi
-              if [ "$minor" -gt 99 ]; then major=$((major + 1)); minor=0; fi
-              tag="v$major.$minor.$patch"
+              titles=$(gh api "repos/$GITHUB_REPOSITORY/compare/$latest...$GITHUB_SHA" --paginate \
+                --jq '.commits[].commit.message | split("\n")[0]')
+            fi
+            tag=$(printf '%s\n' "$titles" | .github/scripts/next-version.sh "$latest")
+            if [ -z "$tag" ]; then
+              echo "Skipped by [skip release]"
+              exit 0
             fi
           fi
           if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
