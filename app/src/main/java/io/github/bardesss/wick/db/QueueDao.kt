@@ -89,14 +89,27 @@ abstract class QueueDao {
 
     /**
      * A mark that reverses a pending one cancels it, otherwise the newest mark replaces the old
-     * one. A pending mark that is being sent right now ([inFlight]) is never cancelled, because
-     * the server may already have it.
+     * one. A pending mark that is being sent right now ([inFlight]) or was sent before (attempted)
+     * is never cancelled, because the server may already have it.
      */
     @Transaction
     open suspend fun enqueueOrCancel(mark: PendingMarkEntity, inFlight: Boolean) {
         val existing = find(mark.itemId)
-        if (existing != null && existing.read != mark.read && !inFlight) deleteOne(mark.itemId) else enqueue(mark)
+        if (existing != null && existing.read != mark.read && !existing.attempted && !inFlight) {
+            deleteOne(mark.itemId)
+        } else {
+            enqueue(mark.copy(attempted = existing?.attempted ?: false))
+        }
     }
+
+    /** Flags marks whose send is about to start. */
+    @Transaction
+    open suspend fun markAttempted(ids: List<String>) {
+        ids.chunked(CHUNK).forEach { markAttemptedChunk(it) }
+    }
+
+    @Query("UPDATE PendingMarkEntity SET attempted = 1 WHERE itemId IN (:ids)")
+    protected abstract suspend fun markAttemptedChunk(ids: List<String>)
 
     /**
      * Records that the server accepted [marks]: removes the rows that were not re-queued since,

@@ -138,7 +138,10 @@ class MarkQueue(
         if (!clean) return false
 
         val marks = stateLock.withLock {
-            queueDao.pending().also { snapshot -> inFlight.addAll(snapshot.map { it.itemId }) }
+            queueDao.pending().also { snapshot ->
+                inFlight.addAll(snapshot.map { it.itemId })
+                queueDao.markAttempted(snapshot.map { it.itemId })
+            }
         }
         try {
             for (read in listOf(true, false)) {

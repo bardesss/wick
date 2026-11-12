@@ -16,6 +16,7 @@ class FakeReaderApi : ReaderApi {
 
     private var failures = 0
     private var failWith: ApiError = ApiError.Unreachable
+    private var applyThenFail = 0
 
     val setReadCalls = mutableListOf<Pair<List<String>, Boolean>>()
     val markAllCalls = mutableListOf<Pair<String, Long>>()
@@ -29,6 +30,11 @@ class FakeReaderApi : ReaderApi {
     fun failNext(n: Int, error: ApiError = ApiError.Unreachable) {
         failures = n
         failWith = error
+    }
+
+    /** The next [n] setRead calls change server state and then throw, like a reply lost on the way back. */
+    fun failNextAfterApplying(n: Int) {
+        applyThenFail = n
     }
 
     fun addFeed(id: String, folder: String? = null) {
@@ -97,6 +103,10 @@ class FakeReaderApi : ReaderApi {
         beforeSetRead?.invoke()
         setReadCalls += itemIds.toList() to read
         if (read) readIds += itemIds else readIds -= itemIds.toSet()
+        if (applyThenFail > 0) {
+            applyThenFail--
+            throw ApiError.Unreachable
+        }
     }
 
     override suspend fun markAllRead(stream: StreamId, olderThanUsec: Long) {

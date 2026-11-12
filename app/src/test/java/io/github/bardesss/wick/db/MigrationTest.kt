@@ -33,8 +33,8 @@ class MigrationTest {
         context.deleteDatabase(name)
     }
 
-    private fun createVersion1() {
-        val schema = JSONObject(File("schemas/io.github.bardesss.wick.db.WickDb/1.json").readText()).getJSONObject("database")
+    private fun createVersion(version: Int, extra: (SQLiteDatabase) -> Unit) {
+        val schema = JSONObject(File("schemas/io.github.bardesss.wick.db.WickDb/$version.json").readText()).getJSONObject("database")
         val file = context.getDatabasePath(name).apply { parentFile?.mkdirs() }
         SQLiteDatabase.openOrCreateDatabase(file, null).use { db ->
             val entities = schema.getJSONArray("entities")
@@ -49,12 +49,16 @@ class MigrationTest {
             }
             val setup = schema.getJSONArray("setupQueries")
             for (i in 0 until setup.length()) db.execSQL(setup.getString(i))
-            db.execSQL("INSERT INTO FeedEntity (id, title, folder, htmlUrl, iconUrl) VALUES ('feed/1', 'News', 'Tech', 'https://n.example', 'https://n.example/i.png')")
-            db.execSQL("INSERT INTO ItemEntity (id, feedId, title, url, publishedSec, html, read, manualUnread) VALUES ('a', 'feed/1', 'A', NULL, 100, NULL, 1, 0)")
-            db.execSQL("INSERT INTO PendingMarkEntity (itemId, read, queuedAt) VALUES ('a', 1, 7)")
-            db.execSQL("INSERT INTO PendingMarkAllEntity (streamRaw, olderThanUsec) VALUES ('user/-/label/Tech', 5000000)")
-            db.version = 1
+            extra(db)
+            db.version = version
         }
+    }
+
+    private fun createVersion1() = createVersion(1) { db ->
+        db.execSQL("INSERT INTO FeedEntity (id, title, folder, htmlUrl, iconUrl) VALUES ('feed/1', 'News', 'Tech', 'https://n.example', 'https://n.example/i.png')")
+        db.execSQL("INSERT INTO ItemEntity (id, feedId, title, url, publishedSec, html, read, manualUnread) VALUES ('a', 'feed/1', 'A', NULL, 100, NULL, 1, 0)")
+        db.execSQL("INSERT INTO PendingMarkEntity (itemId, read, queuedAt) VALUES ('a', 1, 7)")
+        db.execSQL("INSERT INTO PendingMarkAllEntity (streamRaw, olderThanUsec) VALUES ('user/-/label/Tech', 5000000)")
     }
 
     @Test
@@ -68,6 +72,19 @@ class MigrationTest {
             assertEquals(setOf("a"), db.itemDao().readAmong(listOf("a")))
             // version 3 does not know when older items were read, so none of them count as recent
             assertEquals(emptyList<String>(), db.itemDao().recentlyRead(10))
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun migrates_3_to_4_keeping_queued_marks() = runTest {
+        createVersion(3) { db ->
+            db.execSQL("INSERT INTO PendingMarkEntity (itemId, read, queuedAt) VALUES ('a', 1, 7)")
+        }
+        val db = Room.databaseBuilder(context, WickDb::class.java, name).allowMainThreadQueries().build()
+        try {
+            assertEquals(listOf(PendingMarkEntity("a", read = true, queuedAt = 7, attempted = false)), db.queueDao().pending())
         } finally {
             db.close()
         }
