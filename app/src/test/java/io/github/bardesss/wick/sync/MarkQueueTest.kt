@@ -50,6 +50,31 @@ class MarkQueueTest {
     private fun row(id: String) = db.storedItems(listOf(id)).single()
 
     @Test
+    fun unread_after_mark_all_keeps_item_unread_on_server() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.mark("a", read = true, manual = false)
+        q.markAll(StreamId.All, null, newestLoadedSec = 100)
+        q.mark("a", read = false, manual = true)
+        runCurrent()
+        assertTrue(q.flush())
+        assertFalse(api.isRead("a"))
+        assertTrue(api.isRead("b"))
+        assertTrue(db.queueDao().pending().isEmpty())
+    }
+
+    @Test
+    fun mark_all_keeps_read_marks_it_does_not_cover() = runTest {
+        seed("a", publishedSec = 100)
+        seed("c", publishedSec = 200)
+        val q = queue()
+        q.mark("c", read = true, manual = false)
+        q.markAll(StreamId.All, null, newestLoadedSec = 100)
+        runCurrent()
+        assertEquals(listOf("c"), db.queueDao().pending().map { it.itemId })
+    }
+
+    @Test
     fun mark_is_local_immediately_and_sent_after_flush() = runTest {
         seed("a", "b")
         val q = queue()

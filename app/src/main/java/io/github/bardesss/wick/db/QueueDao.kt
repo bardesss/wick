@@ -62,6 +62,31 @@ abstract class QueueDao {
     )
     abstract suspend fun dropUnreadMarksForReadItems()
 
+    @Query(
+        "DELETE FROM PendingMarkEntity WHERE read = 1 AND itemId IN " +
+            "(SELECT id FROM ItemEntity WHERE publishedSec <= :publishedAtOrBeforeSec)",
+    )
+    protected abstract suspend fun dropReadMarksUpTo(publishedAtOrBeforeSec: Long)
+
+    @Query(
+        "DELETE FROM PendingMarkEntity WHERE read = 1 AND itemId IN " +
+            "(SELECT id FROM ItemEntity WHERE feedId IN (:feedIds) AND publishedSec <= :publishedAtOrBeforeSec)",
+    )
+    protected abstract suspend fun dropReadMarksOfFeedsUpTo(feedIds: List<String>, publishedAtOrBeforeSec: Long)
+
+    /**
+     * Drops pending read marks for the items a mark-all covers (same scope and cutoff as
+     * [ItemDao.markReadWhere]), so a later unread mark on one of them is queued, not cancelled.
+     */
+    @Transaction
+    open suspend fun dropReadMarksCoveredBy(feedIds: List<String>?, publishedAtOrBeforeSec: Long) {
+        if (feedIds == null) {
+            dropReadMarksUpTo(publishedAtOrBeforeSec)
+        } else {
+            feedIds.chunked(CHUNK).forEach { dropReadMarksOfFeedsUpTo(it, publishedAtOrBeforeSec) }
+        }
+    }
+
     /**
      * A mark that reverses a pending one cancels it, otherwise the newest mark replaces the old
      * one. A pending mark that is being sent right now ([inFlight]) is never cancelled, because
