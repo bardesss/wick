@@ -2,6 +2,7 @@ package io.github.bardesss.wick.sync
 
 import android.content.Context
 import android.util.Log
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
@@ -22,10 +23,14 @@ import java.util.concurrent.TimeUnit
 
 private const val KEY_FLUSH_ONLY = "flushOnly"
 
+/** How many runs a flush-only job gets before it leaves the marks for the next sync. */
+internal const val MAX_FLUSH_ATTEMPTS = 5
+
 /**
  * Sends the queued marks and, unless [SyncWorker.input] asked for the flush alone, brings the
- * database up to date. It always reports success: a failed run is retried by the next
- * periodic one, so a dead server cannot cause a retry storm.
+ * database up to date. A full sync always reports success: the next periodic run tries again,
+ * so a dead server cannot cause a retry storm. A flush-only job asks to be retried with backoff
+ * while marks are still queued, up to [MAX_FLUSH_ATTEMPTS] runs, then leaves them to the next sync.
  */
 class SyncWorker(
     context: Context,
@@ -37,9 +42,10 @@ class SyncWorker(
 
     override suspend fun doWork(): Result {
         if (auth() == null) return Result.success()
+        val flushOnly = inputData.getBoolean(KEY_FLUSH_ONLY, false)
         try {
-            if (inputData.getBoolean(KEY_FLUSH_ONLY, false)) {
-                queue().flush()
+            if (flushOnly) {
+                if (!queue().flush() && runAttemptCount < MAX_FLUSH_ATTEMPTS) return Result.retry()
             } else {
                 // a failure here is an ApiError that the next run tries again
                 engine().backgroundSync()
@@ -48,6 +54,7 @@ class SyncWorker(
             throw e
         } catch (e: Exception) {
             Log.e(LOG_TAG, "background sync failed", e)
+            if (flushOnly && runAttemptCount < MAX_FLUSH_ATTEMPTS) return Result.retry()
         }
         return Result.success()
     }
@@ -102,6 +109,7 @@ object SyncWork {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(online)
             .setInputData(SyncWorker.input(flushOnly = true))
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         wm.enqueueUniqueWork(FLUSH, ExistingWorkPolicy.REPLACE, request)
     }
