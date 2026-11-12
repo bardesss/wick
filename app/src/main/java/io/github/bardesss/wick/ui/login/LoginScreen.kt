@@ -138,7 +138,7 @@ fun LoginContent(state: LoginState, onSignIn: (String, String, String) -> Unit) 
 
         Button(
             onClick = submit,
-            enabled = !state.busy,
+            enabled = !state.busy && server.isNotBlank() && user.isNotBlank() && key.isNotBlank(),
             shape = RoundedCornerShape(10.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = WickColors.Amber,

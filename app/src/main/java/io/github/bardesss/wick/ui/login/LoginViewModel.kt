@@ -11,6 +11,7 @@ import io.github.bardesss.wick.api.ReaderApi
 import io.github.bardesss.wick.data.CredentialStore
 import io.github.bardesss.wick.ui.Note
 import io.github.bardesss.wick.ui.note
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,6 +53,11 @@ class LoginViewModel(
         // the platform refuses plain http, and so does Wick, with a reason
         if (entered.startsWith("http://", ignoreCase = true)) {
             _state.value = LoginState(error = Note(R.string.error_needs_https))
+            return
+        }
+        // anything else that is not a usable https address would only surface as the VPN message
+        if (entered.toHttpUrlOrNull()?.isHttps != true) {
+            _state.value = LoginState(error = Note(R.string.error_bad_address))
             return
         }
         _state.value = LoginState(busy = true)

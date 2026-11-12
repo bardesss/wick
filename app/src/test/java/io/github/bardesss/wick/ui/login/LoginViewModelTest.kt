@@ -115,6 +115,24 @@ class LoginViewModelTest {
     }
 
     @Test
+    fun ftp_address_is_a_bad_address() {
+        val vm = LoginViewModel(api, creds)
+        vm.signIn("ftp://example.com", "me", "key")
+        assertEquals(Note(R.string.error_bad_address), vm.state.value.error)
+        assertTrue(api.logins.isEmpty())
+        assertFalse(vm.state.value.busy)
+    }
+
+    @Test
+    fun address_with_a_space_is_a_bad_address() {
+        val vm = LoginViewModel(api, creds)
+        vm.signIn("my server.example.com", "me", "key")
+        assertEquals(Note(R.string.error_bad_address), vm.state.value.error)
+        assertTrue(api.logins.isEmpty())
+        assertFalse(vm.state.value.busy)
+    }
+
+    @Test
     fun normalises_api_url_and_keeps_its_path() {
         assertEquals("https://example.com", normaliseApiUrl(" example.com/ "))
         assertEquals("http://host:8082", normaliseApiUrl("http://host:8082/"))
