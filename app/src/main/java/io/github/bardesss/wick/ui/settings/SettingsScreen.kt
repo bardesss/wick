@@ -43,6 +43,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import io.github.bardesss.wick.ui.picker.MarkAllArm
+import kotlinx.coroutines.delay
 import io.github.bardesss.wick.BuildConfig
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
@@ -61,6 +72,7 @@ private val SegmentPadding = PaddingValues(horizontal = 12.dp)
 
 // every setting row has the same height, whatever control it holds
 private val RowHeight = 60.dp
+private const val ARM_TIMEOUT_MS = 3000L
 private const val PROJECT_URL = "https://github.com/bardesss/wick"
 
 /** Null for a setting that has not been read yet; its control shows no choice and waits until it is. */
@@ -78,6 +90,7 @@ fun SettingsScreen(
     onHaptics: (Boolean) -> Unit,
     onLinkTarget: (LinkTarget) -> Unit,
     onSignOut: () -> Unit,
+    onClose: () -> Unit,
     syncMinutes: Int? = SettingsStore.SYNC_DEFAULT,
     recentCount: Int? = SettingsStore.RECENT_DEFAULT,
     onSyncMinutes: (Int) -> Unit = {},
@@ -96,16 +109,32 @@ fun SettingsScreen(
             .navigationBarsPadding(),
     ) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 22.dp)) {
-            Text(
-                stringResource(R.string.settings),
-                style = WickText.Header,
-                color = WickColors.Paper,
-                // same box as the list header, so the title lands where the list's does
-                modifier = Modifier
-                    .padding(top = 20.dp, bottom = 14.dp)
-                    .heightIn(min = TapTarget)
-                    .wrapContentHeight(Alignment.CenterVertically),
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.settings),
+                    style = WickText.Header,
+                    color = WickColors.Paper,
+                    // same box as the list header, so the title lands where the list's does
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = TapTarget)
+                        .wrapContentHeight(Alignment.CenterVertically),
+                )
+                val closeLabel = stringResource(R.string.settings_close)
+                Box(
+                    Modifier
+                        .heightIn(min = TapTarget)
+                        .widthIn(min = TapTarget)
+                        .semantics { role = Role.Button; contentDescription = closeLabel }
+                        .clickable(onClick = onClose),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(painter = painterResource(R.drawable.ic_close), contentDescription = null, tint = WickColors.Amber, modifier = Modifier.size(22.dp))
+                }
+            }
 
             TwoChoiceRow(
                 label = stringResource(R.string.settings_sort),
@@ -140,14 +169,22 @@ fun SettingsScreen(
 
             Section(stringResource(R.string.settings_account)) {
                 Text(server, style = WickText.Note, color = WickColors.Meta, modifier = Modifier.padding(vertical = 8.dp))
+                val arm = remember { MarkAllArm() }
+                // an armed sign out is dropped after a pause
+                LaunchedEffect(arm.armed) {
+                    if (arm.armed) {
+                        delay(ARM_TIMEOUT_MS)
+                        arm.disarm()
+                    }
+                }
                 Text(
-                    stringResource(R.string.settings_sign_out),
+                    stringResource(if (arm.armed) R.string.settings_sign_out_armed else R.string.settings_sign_out),
                     style = RowStyle,
                     color = WickColors.Amber,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = TapTarget)
-                        .clickable(role = Role.Button, onClick = onSignOut)
+                        .clickable(role = Role.Button) { if (arm.tap(canMark = true)) onSignOut() }
                         .padding(vertical = 12.dp),
                 )
             }
