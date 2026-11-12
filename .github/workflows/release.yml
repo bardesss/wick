@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       versionName:
-        description: Version to build (dry run, nothing is published)
+        description: Version to build (dry run from main only, nothing is published)
         default: 0.0.1
 
 # one release at a time, so each run sees the tag of the one before
