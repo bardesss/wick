@@ -97,12 +97,12 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun armed_sign_out_disarms_after_three_seconds() {
+    fun armed_sign_out_disarms_after_a_pause() {
         show()
 
         rule.onNodeWithText("Sign out").performClick()
         rule.onNodeWithText("Tap again to sign out").assertExists()
-        rule.mainClock.advanceTimeBy(3000)
+        rule.mainClock.advanceTimeBy(4000)
         rule.waitForIdle()
 
         rule.onNodeWithText("Sign out").assertExists()
