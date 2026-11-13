@@ -100,7 +100,7 @@ class MarkQueue(
         ops.trySend {
             inTransaction {
                 itemDao.markReadWhere(feedIds, newestLoadedSec)
-                queueDao.dropReadMarksCoveredBy(feedIds, newestLoadedSec)
+                queueDao.markReadMarksCoveredByAttempted(feedIds, newestLoadedSec)
                 queueDao.dropUnreadMarksForReadItems()
                 queueDao.enqueueAll(
                     PendingMarkAllEntity(streamRaw = stream.raw, olderThanUsec = (newestLoadedSec + 1) * 1_000_000),

@@ -39,7 +39,10 @@ data class PendingMarkEntity(
     @PrimaryKey val itemId: String,
     val read: Boolean,
     val queuedAt: Long,
-    /** Set once a send has started, so the server may have it even if the reply never came. */
+    /**
+     * Set once a send has started, so the server may have it even if the reply never came. Also set
+     * on read marks a mark-all covers, since the mark-all may reach the server first.
+     */
     @ColumnInfo(defaultValue = "0") val attempted: Boolean = false,
 )
 
