@@ -35,13 +35,14 @@ internal const val MAX_HTML_INPUT = 200_000
 
 /**
  * Turns feed HTML into styled text for the sheet. Returns null when nothing readable is left.
+ * Relative links resolve against [baseUrl], the article address; without one they stay unlinked.
  * Pure, so it can run on any thread.
  */
-fun htmlToAnnotated(html: String?): AnnotatedString? {
+fun htmlToAnnotated(html: String?, baseUrl: String? = null): AnnotatedString? {
     if (html.isNullOrBlank()) return null
     val out = TextWriter()
     // very long feeds are cut rather than parsed whole; the sheet only shows the start anyway
-    out.children(Jsoup.parseBodyFragment(html.take(MAX_HTML_INPUT)).body())
+    out.children(Jsoup.parseBodyFragment(html.take(MAX_HTML_INPUT), baseUrl.orEmpty()).body())
     return out.build()
 }
 
@@ -94,11 +95,13 @@ private class TextWriter {
             tag in headings || tag == "b" || tag == "strong" -> Bold
             tag == "i" || tag == "em" || tag == "cite" || tag == "blockquote" -> Italic
             tag == "pre" || tag == "code" || tag == "kbd" || tag == "samp" || tag == "tt" -> Mono
-            tag == "a" -> el.attr("href").trim().takeIf { href -> linkSchemes.any { href.startsWith(it, ignoreCase = true) } }
+            tag == "a" -> el.absUrl("href").ifEmpty { el.attr("href").trim() }.takeIf { href -> linkSchemes.any { href.startsWith(it, ignoreCase = true) } }
                 ?.let { LinkAnnotation.Url(it, LinkStyles) }
             else -> null
         }
         if (style != null) mark(style, start)
+        // cells share a line, so the next one needs a space; a row end clears it again
+        if (tag == "td" || tag == "th") space = true
         if (block) lineBreak(2)
     }
 

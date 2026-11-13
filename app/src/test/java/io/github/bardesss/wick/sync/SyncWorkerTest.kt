@@ -86,13 +86,26 @@ class SyncWorkerTest {
     }
 
     @Test
+    fun flush_only_retries_on_its_fourth_attempt() = runTest {
+        seedPendingRead()
+        api.failNext(10, ApiError.Unreachable)
+
+        // runAttemptCount starts at 0, so 3 is the fourth run
+        assertEquals(
+            ListenableWorker.Result.retry(),
+            runWorker(flushOnly = true, runAttemptCount = MAX_FLUSH_ATTEMPTS - 2),
+        )
+    }
+
+    @Test
     fun flush_only_gives_up_after_five_attempts() = runTest {
         seedPendingRead()
         api.failNext(10, ApiError.Unreachable)
 
+        // the fifth run is the last one
         assertEquals(
             ListenableWorker.Result.success(),
-            runWorker(flushOnly = true, runAttemptCount = MAX_FLUSH_ATTEMPTS),
+            runWorker(flushOnly = true, runAttemptCount = MAX_FLUSH_ATTEMPTS - 1),
         )
     }
 

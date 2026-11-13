@@ -26,7 +26,7 @@ import coil3.compose.AsyncImagePainter
 import io.github.bardesss.wick.api.KnownApiPaths
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.WickColors
-import java.net.URI
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** The site the API lives on: the API URL without a trailing known API path, else the URL itself. */
 fun siteRoot(apiUrl: String): String {
@@ -36,19 +36,17 @@ fun siteRoot(apiUrl: String): String {
 }
 
 /**
- * Absolute URLs as they are, relative ones against the site of the API at [server], null when
- * there is no icon. Only http and https come back, so the image loader never reads a local file.
+ * Absolute URLs normalised by HttpUrl, relative ones resolved against the site of the API at
+ * [server], null when there is no icon. Only http and https come back, so the image loader never
+ * reads a local file.
  */
 fun resolveIcon(server: String, iconUrl: String?): String? {
     val icon = iconUrl?.trim()
     if (icon.isNullOrEmpty()) return null
-    val resolved = try {
-        val uri = URI(icon)
-        if (uri.isAbsolute) icon else URI(siteRoot(server) + "/").resolve(uri).toString()
-    } catch (e: Exception) {
-        return null
-    }
-    return resolved.takeIf(::isWebUrl)
+    // HttpUrl encodes spaces and similar characters and only accepts http and https
+    val resolved = icon.toHttpUrlOrNull()
+        ?: (siteRoot(server) + "/").toHttpUrlOrNull()?.resolve(icon)
+    return resolved?.toString()
 }
 
 private val TileShape = RoundedCornerShape(6.dp)

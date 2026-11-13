@@ -83,6 +83,42 @@ class MarkQueueTest {
     }
 
     @Test
+    fun mark_all_keeps_the_read_marks_it_covers_and_sends_them_after_it() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.mark("a", read = true, manual = false)
+        q.markAll(StreamId.All, null, newestLoadedSec = 100)
+        runCurrent()
+
+        val pending = db.queueDao().pending()
+        assertEquals(listOf("a"), pending.map { it.itemId })
+        assertTrue(pending.single().attempted)
+
+        var markAllsBeforeSetRead = -1
+        api.beforeSetRead = { markAllsBeforeSetRead = api.markAllCalls.size }
+        assertTrue(q.flush())
+        assertEquals(1, markAllsBeforeSetRead)
+        assertEquals(listOf(listOf("a") to true), api.setReadCalls)
+        assertTrue(db.queueDao().pending().isEmpty())
+    }
+
+    @Test
+    fun mark_all_rejected_with_4xx_still_sends_the_read_marks_it_covered() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.mark("a", read = true, manual = false)
+        q.markAll(StreamId.All, null, newestLoadedSec = 100)
+        runCurrent()
+
+        api.failNext(1, ApiError.Http(404))
+        assertTrue(q.flush())
+        assertTrue(db.queueDao().pendingAll().isEmpty())
+        assertTrue(api.isRead("a"))
+        assertFalse(api.isRead("b"))
+        assertTrue(db.queueDao().pending().isEmpty())
+    }
+
+    @Test
     fun mark_all_keeps_read_marks_it_does_not_cover() = runTest {
         seed("a", publishedSec = 100)
         seed("c", publishedSec = 200)

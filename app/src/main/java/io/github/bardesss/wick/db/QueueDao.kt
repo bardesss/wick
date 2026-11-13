@@ -63,27 +63,29 @@ abstract class QueueDao {
     abstract suspend fun dropUnreadMarksForReadItems()
 
     @Query(
-        "DELETE FROM PendingMarkEntity WHERE read = 1 AND itemId IN " +
+        "UPDATE PendingMarkEntity SET attempted = 1 WHERE read = 1 AND itemId IN " +
             "(SELECT id FROM ItemEntity WHERE publishedSec <= :publishedAtOrBeforeSec)",
     )
-    protected abstract suspend fun dropReadMarksUpTo(publishedAtOrBeforeSec: Long)
+    protected abstract suspend fun markReadMarksAttemptedUpTo(publishedAtOrBeforeSec: Long)
 
     @Query(
-        "DELETE FROM PendingMarkEntity WHERE read = 1 AND itemId IN " +
+        "UPDATE PendingMarkEntity SET attempted = 1 WHERE read = 1 AND itemId IN " +
             "(SELECT id FROM ItemEntity WHERE feedId IN (:feedIds) AND publishedSec <= :publishedAtOrBeforeSec)",
     )
-    protected abstract suspend fun dropReadMarksOfFeedsUpTo(feedIds: List<String>, publishedAtOrBeforeSec: Long)
+    protected abstract suspend fun markReadMarksOfFeedsAttemptedUpTo(feedIds: List<String>, publishedAtOrBeforeSec: Long)
 
     /**
-     * Drops pending read marks for the items a mark-all covers (same scope and cutoff as
-     * [ItemDao.markReadWhere]), so a later unread mark on one of them is queued, not cancelled.
+     * Flags pending read marks for the items a mark-all covers (same scope and cutoff as
+     * [ItemDao.markReadWhere]) as attempted. A later unread mark on one of them then replaces it
+     * instead of cancelling it, and the read marks are still sent after the mark-all, so nothing
+     * is lost if the server applies the cutoff differently or the mark-all is dropped.
      */
     @Transaction
-    open suspend fun dropReadMarksCoveredBy(feedIds: List<String>?, publishedAtOrBeforeSec: Long) {
+    open suspend fun markReadMarksCoveredByAttempted(feedIds: List<String>?, publishedAtOrBeforeSec: Long) {
         if (feedIds == null) {
-            dropReadMarksUpTo(publishedAtOrBeforeSec)
+            markReadMarksAttemptedUpTo(publishedAtOrBeforeSec)
         } else {
-            feedIds.chunked(CHUNK).forEach { dropReadMarksOfFeedsUpTo(it, publishedAtOrBeforeSec) }
+            feedIds.chunked(CHUNK).forEach { markReadMarksOfFeedsAttemptedUpTo(it, publishedAtOrBeforeSec) }
         }
     }
 

@@ -324,7 +324,7 @@ class ListViewModel(
     suspend fun sheetBody(id: String, link: String?): SheetBody.Ready = withContext(work) {
         val html = itemDao.htmlOf(id)
         val image = if (settings.leadImages.first()) leadImageUrl(html, link) else null
-        SheetBody.Ready(htmlToAnnotated(html), image)
+        SheetBody.Ready(htmlToAnnotated(html, link), image)
     }
 
     /** Queued marks are sent by the flush job the app enqueues when it stops. */

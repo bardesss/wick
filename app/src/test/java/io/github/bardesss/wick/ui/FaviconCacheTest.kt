@@ -2,6 +2,7 @@ package io.github.bardesss.wick.ui
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Paint
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import coil3.request.ImageRequest
@@ -58,7 +59,7 @@ class FaviconCacheTest {
         // Coil hops to the main thread, which only runs while this test thread idles its looper
         var result: ImageResult? = null
         val worker = thread { result = runBlocking { loader.execute(ImageRequest.Builder(context).data(url).build()) } }
-        val deadline = System.currentTimeMillis() + 20_000
+        val deadline = System.currentTimeMillis() + 120_000
         while (worker.isAlive && System.currentTimeMillis() < deadline) {
             shadowOf(Looper.getMainLooper()).idle()
             Thread.sleep(5)
@@ -88,6 +89,10 @@ class FaviconCacheTest {
     }
 
     private fun loadSvg(svg: String): Bitmap {
+        // the first bitmap and paint load robolectric's native graphics, which can take longer
+        // than the deadline below, so do it here on the test thread first
+        Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        Paint()
         server.enqueue(MockResponse().setHeader("Content-Type", "image/svg+xml").setBody(svg))
         server.start()
         val context = ApplicationProvider.getApplicationContext<Context>()
@@ -99,7 +104,7 @@ class FaviconCacheTest {
         val worker = thread {
             result = runBlocking { loader.execute(ImageRequest.Builder(context).data(url).size(40).build()) }
         }
-        val deadline = System.currentTimeMillis() + 20_000
+        val deadline = System.currentTimeMillis() + 120_000
         while (worker.isAlive && System.currentTimeMillis() < deadline) {
             shadowOf(Looper.getMainLooper()).idle()
             Thread.sleep(5)

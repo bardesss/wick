@@ -6,12 +6,14 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.bardesss.wick.api.StreamId
+import io.github.bardesss.wick.ui.theme.TapTarget
 import io.github.bardesss.wick.ui.theme.WickTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -76,5 +78,20 @@ class PickerDrawerFoldTest {
 
         rule.onNodeWithContentDescription("Wick").assertHasNoClickAction()
         rule.onAllNodesWithText("wıck").assertCountEquals(0)
+    }
+
+    @Test
+    fun picker_rows_are_at_least_tap_target_tall() {
+        show(
+            listOf(
+                PickerEntry.All(3),
+                PickerEntry.Folder("Tech", 3),
+                PickerEntry.Feed("feed/1", "Daily Feed", null, 2, indented = true),
+            ),
+        )
+
+        rule.onNodeWithText("Daily Feed").assertHeightIsAtLeast(TapTarget)
+        rule.onNodeWithText("Tech").assertHeightIsAtLeast(TapTarget)
+        rule.onNodeWithText("All unread").assertHeightIsAtLeast(TapTarget)
     }
 }

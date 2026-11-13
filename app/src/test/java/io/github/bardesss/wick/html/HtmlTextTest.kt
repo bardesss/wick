@@ -86,4 +86,36 @@ class HtmlTextTest {
         val out = htmlToAnnotated("<div><p>One</p><br><br><br><div></div><p>Two</p></div>")
         assertEquals("One\n\nTwo", out?.text)
     }
+
+    @Test
+    fun relative_link_resolves_against_the_article() {
+        val out = htmlToAnnotated("<p><a href=\"/p\">x</a></p>", "https://site.example/a/b")!!
+        val link = out.getLinkAnnotations(0, out.length).single()
+        assertEquals("https://site.example/p", (link.item as LinkAnnotation.Url).url)
+    }
+
+    @Test
+    fun protocol_relative_link_gets_the_scheme() {
+        val out = htmlToAnnotated("<p><a href=\"//cdn.example/x\">x</a></p>", "https://site.example/a/b")!!
+        val link = out.getLinkAnnotations(0, out.length).single()
+        assertEquals("https://cdn.example/x", (link.item as LinkAnnotation.Url).url)
+    }
+
+    @Test
+    fun relative_link_without_a_base_stays_unlinked() {
+        val out = htmlToAnnotated("<p><a href=\"/p\">x</a></p>")!!
+        assertEquals(0, out.getLinkAnnotations(0, out.length).size)
+    }
+
+    @Test
+    fun table_cells_are_separated() {
+        val out = htmlToAnnotated("<table><tr><td>Price</td><td>10</td></tr></table>")
+        assertEquals("Price 10", out?.text)
+    }
+
+    @Test
+    fun table_rows_stay_on_their_own_lines() {
+        val out = htmlToAnnotated("<table><tr><th>A</th><td>1</td></tr><tr><th>B</th><td>2</td></tr></table>")
+        assertEquals("A 1\n\nB 2", out?.text)
+    }
 }
