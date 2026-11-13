@@ -140,12 +140,20 @@ fun LoginContent(state: LoginState, onSignIn: (String, String, String) -> Unit) 
             onClick = submit,
             enabled = !state.busy && server.isNotBlank() && user.isNotBlank() && key.isNotBlank(),
             shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = WickColors.Amber,
-                contentColor = WickColors.Night,
-                disabledContainerColor = WickColors.Amber,
-                disabledContentColor = WickColors.Night,
-            ),
+            // while busy the button keeps its enabled look behind the spinner; blank fields get the usual disabled look
+            colors = if (state.busy) {
+                ButtonDefaults.buttonColors(
+                    containerColor = WickColors.Amber,
+                    contentColor = WickColors.Night,
+                    disabledContainerColor = WickColors.Amber,
+                    disabledContentColor = WickColors.Night,
+                )
+            } else {
+                ButtonDefaults.buttonColors(
+                    containerColor = WickColors.Amber,
+                    contentColor = WickColors.Night,
+                )
+            },
             modifier = Modifier
                 .padding(top = 28.dp)
                 .fillMaxWidth()
