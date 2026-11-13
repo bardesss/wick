@@ -72,4 +72,18 @@ class FaviconTest {
         assertNull(resolveIcon("https://feeds.example.com", ""))
         assertNull(resolveIcon("https://feeds.example.com", "   "))
     }
+
+    @Test
+    fun icon_with_a_space_is_encoded() {
+        assertEquals(
+            "https://a.example/my%20icon.png",
+            resolveIcon("https://feeds.example.com", "https://a.example/my icon.png"),
+        )
+    }
+
+    @Test
+    fun relative_icon_with_a_pipe_resolves() {
+        val resolved = resolveIcon("https://s.example/api/greader.php", "/i|x.png")
+        assertEquals(true, resolved?.startsWith("https://s.example/"))
+    }
 }
