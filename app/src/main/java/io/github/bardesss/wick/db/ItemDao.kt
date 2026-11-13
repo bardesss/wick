@@ -118,6 +118,10 @@ abstract class ItemDao {
     @Query("SELECT EXISTS(SELECT 1 FROM ItemEntity)")
     abstract suspend fun any(): Boolean
 
+    /** Whether the item is read locally, or null when it is not stored. */
+    @Query("SELECT read FROM ItemEntity WHERE id = :id")
+    abstract suspend fun isRead(id: String): Boolean?
+
     @Query("SELECT html FROM ItemEntity WHERE id = :id")
     abstract suspend fun htmlOf(id: String): String?
 

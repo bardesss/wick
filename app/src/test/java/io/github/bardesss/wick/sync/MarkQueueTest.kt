@@ -50,6 +50,25 @@ class MarkQueueTest {
     private fun row(id: String) = db.storedItems(listOf(id)).single()
 
     @Test
+    fun two_quick_toggles_cancel_out() = runTest {
+        seed("a")
+        val q = queue()
+        q.toggle("a")
+        q.toggle("a")
+        runCurrent()
+        assertFalse(row("a").read)
+        assertTrue(db.queueDao().pending().isEmpty())
+    }
+
+    @Test
+    fun toggle_ignores_an_unknown_id() = runTest {
+        val q = queue()
+        q.toggle("nope")
+        runCurrent()
+        assertTrue(db.queueDao().pending().isEmpty())
+    }
+
+    @Test
     fun unread_after_mark_all_keeps_item_unread_on_server() = runTest {
         seed("a", "b")
         val q = queue()

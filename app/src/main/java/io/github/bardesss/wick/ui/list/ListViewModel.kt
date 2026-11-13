@@ -304,7 +304,7 @@ class ListViewModel(
     }
 
     fun toggleRead(id: String) {
-        if (id in read.value) queue.mark(id, read = false, manual = true) else queue.mark(id, read = true, manual = false)
+        queue.toggle(id)
     }
 
     /** Whether ticks are on; the screen follows it in its [io.github.bardesss.wick.ui.Haptics]. */
