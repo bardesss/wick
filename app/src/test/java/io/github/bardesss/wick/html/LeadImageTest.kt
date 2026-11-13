@@ -45,11 +45,17 @@ class LeadImageTest {
     }
 
     @Test
+    fun http_image_is_upgraded_to_https() {
+        assertEquals("https://a.example/i.jpg", leadImageUrl("<img src=\"http://a.example/i.jpg\">", null))
+        assertEquals("https://a.example/i.jpg", leadImageUrl("<img src=\"HTTP://a.example/i.jpg\">", null))
+    }
+
+    @Test
     fun anything_but_http_is_ignored() {
         val html = "<img src=\"data:image/png;base64,AAAA\"><img src=\"ftp://e.x/a.jpg\">" +
             "<img src=\"file:///sdcard/a.jpg\"><img src=\"http://e.x/ok.jpg\">"
 
-        assertEquals("http://e.x/ok.jpg", leadImageUrl(html, "https://e.x/post"))
+        assertEquals("https://e.x/ok.jpg", leadImageUrl(html, "https://e.x/post"))
     }
 
     @Test

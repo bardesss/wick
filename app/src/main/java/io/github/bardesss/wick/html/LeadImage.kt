@@ -7,8 +7,9 @@ private val hidden = Regex("display\\s*:\\s*none", RegexOption.IGNORE_CASE)
 
 /**
  * The address of the first image in feed HTML that is worth showing, or null. Relative addresses
- * are resolved against the article's [link]. Only http and https count, and an image that says it
- * is up to two pixels wide or high, or is hidden by its style (a tracking pixel), is passed over.
+ * are resolved against the article's [link]. Only http and https count; an http address is
+ * returned as https so the image loads on a secure connection. An image that says it is up to two
+ * pixels wide or high, or is hidden by its style (a tracking pixel), is passed over.
  */
 fun leadImageUrl(html: String?, link: String?): String? {
     if (html.isNullOrBlank()) return null
@@ -17,7 +18,8 @@ fun leadImageUrl(html: String?, link: String?): String? {
         if (side(img.attr("width")) in tinySides || side(img.attr("height")) in tinySides) continue
         if (hidden.containsMatchIn(img.attr("style"))) continue
         val url = img.absUrl("src").trim()
-        if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) return url
+        if (url.startsWith("https://", ignoreCase = true)) return url
+        if (url.startsWith("http://", ignoreCase = true)) return "https://" + url.substring("http://".length)
     }
     return null
 }
