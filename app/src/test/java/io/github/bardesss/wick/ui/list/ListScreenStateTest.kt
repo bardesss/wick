@@ -148,8 +148,10 @@ class ListScreenStateTest {
         showSheetOf(0)
 
         // the process was rebuilt: nothing is kept and the row is gone from the list
-        vm.sheetKept = null
         snapshot(listOf("a"))
+        // the list has to drop the row first, or the open sheet keeps it again before the restore
+        rule.waitUntil(5_000) { rowCount() == 1 }
+        rule.runOnUiThread { vm.sheetKept = null }
         tester.emulateSavedInstanceStateRestore()
         rule.waitUntil(5_000) { !sheetShowing() }
 
