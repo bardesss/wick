@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -72,6 +73,37 @@ class ItemDaoTest {
         items.setRead("a", read = false, manualUnread = true, nowMs = 30)
 
         assertEquals(listOf("b"), items.recentlyRead(10))
+    }
+
+    @Test
+    fun marking_unread_clears_the_read_time() = runTest {
+        items.upsertKeepingLocal(listOf(item("a")))
+        items.setRead("a", read = true, manualUnread = false, nowMs = 10)
+        items.setRead("a", read = false, manualUnread = true, nowMs = 20)
+
+        assertNull(row("a").readAtMs)
+    }
+
+    @Test
+    fun unread_then_mark_all_stays_out_of_recently_read() = runTest {
+        items.upsertKeepingLocal(listOf(item("x")))
+        items.setRead("x", read = true, manualUnread = false, nowMs = 10)
+        items.setRead("x", read = false, manualUnread = true, nowMs = 20)
+        items.markReadWhere(null, publishedAtOrBeforeSec = 1000)
+
+        assertFalse("x" in items.recentlyRead(10))
+    }
+
+    @Test
+    fun prune_keeps_the_configured_number_of_read_rows() = runTest {
+        val ids = (1..RECENT_KEPT + 5).map { "r$it" }
+        items.upsertKeepingLocal(ids.map { item(it) })
+        ids.forEachIndexed { i, id -> items.setRead(id, read = true, manualUnread = false, nowMs = i + 1L) }
+        ids.takeLast(5).forEach { items.setRead(it, read = false, manualUnread = true, nowMs = 1000) }
+
+        items.pruneReadNotIn(emptySet())
+
+        assertEquals(RECENT_KEPT, items.recentlyRead(RECENT_KEPT).size)
     }
 
     @Test
