@@ -11,13 +11,15 @@ import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.ui.theme.WickColors
 
 /** True for http and https links, the only ones a feed may open. */
-fun isWebUrl(url: String): Boolean =
-    url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+fun isWebUrl(url: String): Boolean {
+    val trimmed = url.trim()
+    return trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)
+}
 
 /** The intent that opens [url] for [target], or null for anything but http and https. */
 fun linkIntent(url: String, target: LinkTarget): Intent? {
     if (!isWebUrl(url)) return null
-    val uri = url.toUri()
+    val uri = url.trim().toUri().normalizeScheme()
     return when (target) {
         LinkTarget.DefaultApp -> Intent(Intent.ACTION_VIEW, uri)
         LinkTarget.InApp -> {
@@ -38,12 +40,13 @@ fun linkIntent(url: String, target: LinkTarget): Intent? {
 
 /**
  * Opens [url] the way [target] says. A Custom Tab falls back to a plain view intent when no
- * browser takes it. Other schemes are ignored.
+ * browser takes it. Other schemes are ignored. Returns whether an activity started.
  */
-fun openLink(context: Context, url: String, target: LinkTarget) {
-    val intent = linkIntent(url, target) ?: return
-    if (start(context, intent) || target != LinkTarget.InApp) return
-    start(context, Intent(Intent.ACTION_VIEW, url.toUri()))
+fun openLink(context: Context, url: String, target: LinkTarget): Boolean {
+    val intent = linkIntent(url, target) ?: return false
+    if (start(context, intent)) return true
+    if (target != LinkTarget.InApp) return false
+    return start(context, Intent(Intent.ACTION_VIEW, url.trim().toUri().normalizeScheme()))
 }
 
 // false when nothing on the device can open it

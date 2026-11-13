@@ -47,10 +47,10 @@ abstract class ItemDao {
     @Query("SELECT id, readAtMs FROM ItemEntity WHERE readAtMs IS NOT NULL AND id IN (:ids)")
     protected abstract suspend fun readAtChunk(ids: List<String>): List<ReadAt>
 
-    /** Sets the read state of one item; marking it read also stamps it with [nowMs] for the recently read view. */
+    /** Sets the read state of one item; marking it read stamps it with [nowMs] for the recently read view, marking it unread clears the stamp. */
     @Query(
         "UPDATE ItemEntity SET read = :read, manualUnread = :manualUnread, " +
-            "readAtMs = CASE WHEN :read THEN :nowMs ELSE readAtMs END WHERE id = :id",
+            "readAtMs = CASE WHEN :read THEN :nowMs ELSE NULL END WHERE id = :id",
     )
     abstract suspend fun setRead(id: String, read: Boolean, manualUnread: Boolean, nowMs: Long)
 
@@ -99,7 +99,7 @@ abstract class ItemDao {
         "SELECT id FROM ItemEntity WHERE read = 1 " +
             "AND id NOT IN (SELECT itemId FROM PendingMarkEntity) " +
             "AND id NOT IN (SELECT itemId FROM SnapshotEntity) " +
-            "AND id NOT IN (SELECT id FROM ItemEntity WHERE readAtMs IS NOT NULL ORDER BY readAtMs DESC LIMIT :kept)",
+            "AND id NOT IN (SELECT id FROM ItemEntity WHERE read = 1 AND readAtMs IS NOT NULL ORDER BY readAtMs DESC, id ASC LIMIT :kept)",
     )
     protected abstract suspend fun prunable(kept: Int): List<String>
 
@@ -117,6 +117,10 @@ abstract class ItemDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM ItemEntity)")
     abstract suspend fun any(): Boolean
+
+    /** Whether the item is read locally, or null when it is not stored. */
+    @Query("SELECT read FROM ItemEntity WHERE id = :id")
+    abstract suspend fun isRead(id: String): Boolean?
 
     @Query("SELECT html FROM ItemEntity WHERE id = :id")
     abstract suspend fun htmlOf(id: String): String?

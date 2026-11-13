@@ -24,6 +24,7 @@
     </plurals>
     <string name="list_marked_read">Marked read</string>
     <string name="list_marked_unread">Marked unread</string>
+    <string name="list_no_browser">No app can open this link</string>
     <string name="sheet_age">%1$s ago</string>
     <string name="age_now">now</string>
     <string name="age_minutes">%1$dm</string>

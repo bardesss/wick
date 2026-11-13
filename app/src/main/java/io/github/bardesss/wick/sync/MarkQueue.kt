@@ -74,14 +74,24 @@ class MarkQueue(
     }
 
     fun mark(id: String, read: Boolean, manual: Boolean) {
+        ops.trySend { stateLock.withLock { inTransaction { applyMark(id, read, manual) } } }
+    }
+
+    /** Flips the stored read state, decided when the op runs so quick taps cancel out. */
+    fun toggle(id: String) {
         ops.trySend {
             stateLock.withLock {
                 inTransaction {
-                    itemDao.setRead(id, read, manualUnread = manual && !read, nowMs = clock())
-                    queueDao.enqueueOrCancel(PendingMarkEntity(id, read, nextStamp()), inFlight = id in inFlight)
+                    val wasRead = itemDao.isRead(id)
+                    if (wasRead != null) applyMark(id, read = !wasRead, manual = wasRead)
                 }
             }
         }
+    }
+
+    private suspend fun applyMark(id: String, read: Boolean, manual: Boolean) {
+        itemDao.setRead(id, read, manualUnread = manual && !read, nowMs = clock())
+        queueDao.enqueueOrCancel(PendingMarkEntity(id, read, nextStamp()), inFlight = id in inFlight)
     }
 
     // The server marks only items strictly older than the cutoff, in whole seconds, so ask for

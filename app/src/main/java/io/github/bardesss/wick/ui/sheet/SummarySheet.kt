@@ -61,6 +61,7 @@ import io.github.bardesss.wick.ui.benchTags
 import io.github.bardesss.wick.ui.short
 import io.github.bardesss.wick.ui.spoken
 import io.github.bardesss.wick.ui.list.RowModel
+import io.github.bardesss.wick.ui.isWebUrl
 import io.github.bardesss.wick.ui.openLink
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.Newsreader
@@ -163,7 +164,9 @@ private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, linkTarge
     // links in the text open the same way as the list does
     val links = remember(context, linkTarget) {
         object : UriHandler {
-            override fun openUri(uri: String) = openLink(context, uri, linkTarget)
+            override fun openUri(uri: String) {
+                openLink(context, uri, linkTarget)
+            }
         }
     }
     // the cap sits on the content; a height limit on the sheet itself throws off its anchors
@@ -211,7 +214,7 @@ private fun SheetContent(row: RowModel, body: SheetBody, nowSec: Long, linkTarge
                 }
             }
         }
-        if (row.url != null) Button(
+        if (row.url?.let(::isWebUrl) == true) Button(
             onClick = onOpen,
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = WickColors.Amber, contentColor = WickColors.Night),

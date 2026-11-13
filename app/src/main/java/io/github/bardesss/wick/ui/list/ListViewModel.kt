@@ -56,6 +56,8 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** What a row shows apart from its read state, which changes on its own (see [ListViewModel.read]). */
@@ -103,6 +105,8 @@ class ListViewModel(
     private var busy = false
     private var again = false
     private var applying = false
+    // one snapshot write at a time, so the check of the view and the write go together
+    private val snapshotLock = Mutex()
     private var backgroundedAt: Long? = null
 
     /**
@@ -122,6 +126,9 @@ class ListViewModel(
         .map { states -> Marks(idsWhere(states) { it.read }, idsWhere(states) { it.manualUnread }) }
         .flowOn(work)
         .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 1)
+
+    /** The row the open sheet shows, so it outlives a refresh that drops it and a rotation. */
+    var sheetKept: RowModel? = null
 
     /** Ids of the snapshot rows that are read. */
     val read: StateFlow<Set<String>> = marks.map { it.read }
@@ -238,7 +245,8 @@ class ListViewModel(
     /**
      * Marks the whole view read on the server. The cutoff is the newest of the rows loaded and the
      * unread items stored for the view, so it covers what the header counts, whether or not the
-     * list has caught up. With neither, it is now. Items that arrive later stay unread.
+     * list has caught up. With neither, it is now. Items that arrive later stay unread. The rows
+     * count only when the stored list belongs to this view; right after a switch it may not yet.
      */
     fun markAllRead() {
         val v = _view.value
@@ -247,7 +255,8 @@ class ListViewModel(
         if (loaded.isNullOrEmpty() && count.value <= 0) return
         viewModelScope.launch {
             val feedIds = v.feedIds(feedDao.feedsNow())
-            val newest = listOfNotNull(loaded?.maxOfOrNull { it.publishedSec }, itemDao.newestUnreadSec(feedIds)).maxOrNull()
+            val ours = if (snapshotDao.viewRaw() == v.raw) loaded else null
+            val newest = listOfNotNull(ours?.maxOfOrNull { it.publishedSec }, itemDao.newestUnreadSec(feedIds)).maxOrNull()
                 ?: (clock() / 1000)
             queue.markAll(v, feedIds, newest)
             // the refresh must see the mark-all in the queue
@@ -277,7 +286,8 @@ class ListViewModel(
         var firstIndex = Int.MAX_VALUE
         for (item in frame.items) {
             current[item.id] = item.index
-            if (item.index < firstIndex) firstIndex = item.index
+            // a row kept composed above the viewport must not hold the first index back
+            if (item.offset + item.size > frame.viewportStart && item.index < firstIndex) firstIndex = item.index
             if (item.id in readNow || item.size <= 0) continue
             val top = maxOf(item.offset, frame.viewportStart)
             val bottom = minOf(item.offset + item.size, frame.viewportEnd)
@@ -298,7 +308,7 @@ class ListViewModel(
     }
 
     fun toggleRead(id: String) {
-        if (id in read.value) queue.mark(id, read = false, manual = true) else queue.mark(id, read = true, manual = false)
+        queue.toggle(id)
     }
 
     /** Whether ticks are on; the screen follows it in its [io.github.bardesss.wick.ui.Haptics]. */
@@ -356,10 +366,10 @@ class ListViewModel(
                     }
                     result.fold(
                         onSuccess = { r ->
-                            if (v == _view.value) {
-                                replaceSnapshot(r.ids, clock(), v)
+                            if (replaceSnapshot(r.ids, clock(), v)) {
                                 _capped.value = r.capped
-                            } else {
+                            } else if (v != _view.value) {
+                                // only a new view is worth another round; a failed write alone would loop
                                 again = true
                             }
                             _message.value = if (r.marksStuck) Note(R.string.note_marks_unsent) else null
@@ -389,7 +399,7 @@ class ListViewModel(
         val synced = sync.backgroundSync()
         val ids = storedIds(StreamId.Read)
         return synced.map { Refreshed(ids, capped = false, marksStuck = false) }.onFailure {
-            if (_view.value == StreamId.Read) replaceSnapshot(ids, clock(), StreamId.Read)
+            replaceSnapshot(ids, clock(), StreamId.Read)
         }
     }
 
@@ -401,21 +411,29 @@ class ListViewModel(
             itemDao.unreadIds(view.feedIds(feedDao.feedsNow()), settings.oldestFirst.first())
         }
 
-    /** Swaps the snapshot with scroll marking paused. On failure the old list stays. */
-    private suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long, view: StreamId) {
-        applying = true
-        try {
-            snapshotDao.replaceSnapshot(ids, writtenAtMs, view.raw)
-            tracker.reset()
-            lastFrameIndex = HashMap()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(LOG_TAG, "could not store the new list", e)
-        } finally {
-            applying = false
+    /**
+     * Swaps the snapshot with scroll marking paused, but only while [view] is still the one
+     * showing. Returns whether it wrote; on failure the old list stays.
+     */
+    private suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long, view: StreamId): Boolean =
+        snapshotLock.withLock {
+            // the user moved on while the list was being built
+            if (_view.value != view) return@withLock false
+            applying = true
+            try {
+                snapshotDao.replaceSnapshot(ids, writtenAtMs, view.raw)
+                tracker.reset()
+                lastFrameIndex = HashMap()
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "could not store the new list", e)
+                false
+            } finally {
+                applying = false
+            }
         }
-    }
 
     private fun idsWhere(list: List<LocalState>, test: (LocalState) -> Boolean): Set<String> =
         list.filter(test).mapTo(HashSet()) { it.id }
