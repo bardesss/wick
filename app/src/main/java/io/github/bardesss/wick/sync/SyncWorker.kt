@@ -23,14 +23,15 @@ import java.util.concurrent.TimeUnit
 
 private const val KEY_FLUSH_ONLY = "flushOnly"
 
-/** How many runs a flush-only job gets before it leaves the marks for the next sync. */
+/** How many runs a flush-only job gets in total, counting the first, before it leaves the marks for the next sync. */
 internal const val MAX_FLUSH_ATTEMPTS = 5
 
 /**
  * Sends the queued marks and, unless [SyncWorker.input] asked for the flush alone, brings the
  * database up to date. A full sync always reports success: the next periodic run tries again,
  * so a dead server cannot cause a retry storm. A flush-only job asks to be retried with backoff
- * while marks are still queued, up to [MAX_FLUSH_ATTEMPTS] runs, then leaves them to the next sync.
+ * while marks are still queued, up to [MAX_FLUSH_ATTEMPTS] runs in all (runAttemptCount counts from 0),
+ * then leaves them to the next sync.
  */
 class SyncWorker(
     context: Context,
@@ -45,7 +46,7 @@ class SyncWorker(
         val flushOnly = inputData.getBoolean(KEY_FLUSH_ONLY, false)
         try {
             if (flushOnly) {
-                if (!queue().flush() && runAttemptCount < MAX_FLUSH_ATTEMPTS) return Result.retry()
+                if (!queue().flush() && runAttemptCount < MAX_FLUSH_ATTEMPTS - 1) return Result.retry()
             } else {
                 // a failure here is an ApiError that the next run tries again
                 engine().backgroundSync()
@@ -54,7 +55,7 @@ class SyncWorker(
             throw e
         } catch (e: Exception) {
             Log.e(LOG_TAG, "background sync failed", e)
-            if (flushOnly && runAttemptCount < MAX_FLUSH_ATTEMPTS) return Result.retry()
+            if (flushOnly && runAttemptCount < MAX_FLUSH_ATTEMPTS - 1) return Result.retry()
         }
         return Result.success()
     }
