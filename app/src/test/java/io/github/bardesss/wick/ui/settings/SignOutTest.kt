@@ -184,6 +184,21 @@ class SignOutTest {
     }
 
     @Test
+    fun same_user_in_other_case_keeps_data() = runTest(timeout = 30.seconds) {
+        seed()
+        val queue = db.newQueue(api, backgroundScope)
+        val switch = AccountSwitch(settings) { wipeAccount(queue, db, settings) {} }
+        switch.enter(accountId("https://feeds.example.com", "alice"))
+        queue.mark("a", read = true, manual = false)
+        queue.awaitApplied()
+
+        switch.enter(accountId("https://feeds.example.com", "Alice"))
+
+        assertEquals(listOf("a"), db.queueDao().pending().map { it.itemId })
+        assertEquals(1, db.feedDao().feedsNow().size)
+    }
+
+    @Test
     fun different_account_wipes_previous_data() = runTest(timeout = 30.seconds) {
         seed()
         val queue = db.newQueue(api, backgroundScope)

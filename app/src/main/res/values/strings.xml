@@ -71,6 +71,8 @@
     <string name="settings_account">Account</string>
     <string name="settings_source">Source code</string>
     <string name="settings_sign_out">Sign out</string>
+    <string name="settings_sign_out_armed">Tap again to sign out</string>
+    <string name="settings_close">Close settings</string>
     <string name="error_unreachable">Can\'t reach the server. Is your VPN on?</string>
     <string name="error_needs_https">Wick needs an https address</string>
     <string name="error_bad_credentials">Username or API key is wrong</string>

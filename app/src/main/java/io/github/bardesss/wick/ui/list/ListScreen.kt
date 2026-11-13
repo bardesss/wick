@@ -97,8 +97,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.api.StreamId
 import io.github.bardesss.wick.data.LinkTarget
+import io.github.bardesss.wick.ui.HeaderIcon
 import io.github.bardesss.wick.ui.isWebUrl
 import io.github.bardesss.wick.ui.openLink
+import io.github.bardesss.wick.ui.picker.ARM_TIMEOUT_MS
 import io.github.bardesss.wick.ui.picker.MarkAllArm
 import io.github.bardesss.wick.ui.picker.PickerDrawer
 import io.github.bardesss.wick.ui.picker.show
@@ -635,24 +637,8 @@ private fun Header(
         }
         if (onSearch != null) {
             Spacer(Modifier.width(4.dp))
-            HeaderIcon(R.drawable.ic_search, stringResource(R.string.list_search), "search", onSearch)
+            HeaderIcon(R.drawable.ic_search, stringResource(R.string.list_search), onSearch, "search")
         }
-    }
-}
-
-/** A plain icon with a 48dp tap target, in the colour of the mark all check. */
-@Composable
-private fun HeaderIcon(icon: Int, label: String, tag: String, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .heightIn(min = TapTarget)
-            .widthIn(min = TapTarget)
-            .semantics { role = Role.Button; contentDescription = label }
-            .clickable(onClick = onClick)
-            .testTag(tag),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(painter = painterResource(icon), contentDescription = null, tint = WickColors.Amber, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -691,7 +677,7 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, onClose: () ->
                 }
             },
         )
-        HeaderIcon(R.drawable.ic_close, stringResource(R.string.list_search_close), "search_close", onClose)
+        HeaderIcon(R.drawable.ic_close, stringResource(R.string.list_search_close), onClose, "search_close")
     }
 }
 

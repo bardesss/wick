@@ -370,6 +370,7 @@ class ScreenSnapshots {
             onHaptics = {},
             onLinkTarget = {},
             onSignOut = {},
+            onClose = {},
             version = "0.1.0",
         )
     }

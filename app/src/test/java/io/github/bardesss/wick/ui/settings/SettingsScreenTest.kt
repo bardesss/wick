@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -30,6 +31,8 @@ class SettingsScreenTest {
     val rule = createAndroidComposeRule<ComponentActivity>()
 
     private val changes = mutableListOf<Pair<String, Any>>()
+    private var signOuts = 0
+    private var closes = 0
 
     private fun show() {
         rule.setContent {
@@ -46,7 +49,8 @@ class SettingsScreenTest {
                     onLeadImages = { changes += "leadImages" to it },
                     onHaptics = { changes += "haptics" to it },
                     onLinkTarget = { changes += "linkTarget" to it },
-                    onSignOut = {},
+                    onSignOut = { signOuts++ },
+                    onClose = { closes++ },
                     version = "0.1.0",
                 )
             }
@@ -79,5 +83,38 @@ class SettingsScreenTest {
         rule.onNodeWithText("Default app").performClick()
 
         assertEquals(listOf<Pair<String, Any>>("oldestFirst" to true, "linkTarget" to LinkTarget.DefaultApp), changes)
+    }
+
+    @Test
+    fun sign_out_needs_a_second_tap() {
+        show()
+
+        rule.onNodeWithText("Sign out").performClick()
+        rule.onNodeWithText("Tap again to sign out").assertExists()
+        assertEquals(0, signOuts)
+        rule.onNodeWithText("Tap again to sign out").performClick()
+        assertEquals(1, signOuts)
+    }
+
+    @Test
+    fun armed_sign_out_disarms_after_a_pause() {
+        show()
+
+        rule.onNodeWithText("Sign out").performClick()
+        rule.onNodeWithText("Tap again to sign out").assertExists()
+        rule.mainClock.advanceTimeBy(4000)
+        rule.waitForIdle()
+
+        rule.onNodeWithText("Sign out").assertExists()
+        assertEquals(0, signOuts)
+    }
+
+    @Test
+    fun close_button_closes_settings() {
+        show()
+
+        rule.onNodeWithContentDescription("Close settings").performClick()
+
+        assertEquals(1, closes)
     }
 }

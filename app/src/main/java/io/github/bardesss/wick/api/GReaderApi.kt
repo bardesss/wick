@@ -37,7 +37,14 @@ class GReaderApi(
         val url = root(server).newBuilder().addPathSegments("accounts/ClientLogin").build()
         val body = FormBody.Builder().add("Email", user).add("Passwd", apiKey).build()
         val request = Request.Builder().url(url).post(body).build()
-        val text = execute(request) { code -> if (code == 404) ApiError.NoGReaderApi else null }
+        // the server refuses a sign in with a 403 when the key is wrong
+        val text = execute(request) { code ->
+            when (code) {
+                403 -> ApiError.BadCredentials
+                404 -> ApiError.NoGReaderApi
+                else -> null
+            }
+        }
         // a 2xx without an Auth line at all is some other web app answering this path
         val line = text.lineSequence().firstOrNull { it.startsWith("Auth=") } ?: throw ApiError.NoGReaderApi
         return line.removePrefix("Auth=").trim().takeIf { it.isNotEmpty() } ?: throw ApiError.BadCredentials

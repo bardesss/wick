@@ -78,7 +78,7 @@ fun WickNav(container: AppContainer) {
                 }
                 if (settingsOpen) {
                     BackHandler { settingsOpen = false }
-                    SettingsRoute(container, auth?.server.orEmpty()) {
+                    SettingsRoute(container, auth?.server.orEmpty(), onClose = { settingsOpen = false }) {
                         container.signingOut.value = true
                         session.end()
                         container.appScope.launch {
@@ -109,7 +109,7 @@ fun WickNav(container: AppContainer) {
 }
 
 @Composable
-private fun SettingsRoute(container: AppContainer, server: String, onSignOut: () -> Unit) {
+private fun SettingsRoute(container: AppContainer, server: String, onClose: () -> Unit, onSignOut: () -> Unit) {
     val oldestFirst by remember { container.settings.oldestFirst.map<Boolean, Boolean?> { it } }
         .collectAsStateWithLifecycle(initialValue = null)
     val hideEmpty by remember { container.settings.hideEmpty.map<Boolean, Boolean?> { it } }
@@ -139,6 +139,7 @@ private fun SettingsRoute(container: AppContainer, server: String, onSignOut: ()
         onHaptics = { scope.launch { container.settings.setHaptics(it) } },
         onLinkTarget = { scope.launch { container.settings.setLinkTarget(it) } },
         onSignOut = onSignOut,
+        onClose = onClose,
         syncMinutes = syncMinutes,
         recentCount = recentCount,
         onSyncMinutes = { scope.launch { container.settings.setSyncMinutes(it) } },

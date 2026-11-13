@@ -49,7 +49,8 @@ class AccountSwitch(
         val previous = settings.account()
         if (previous == null) {
             if (hasData()) wipe()
-        } else if (previous != id) {
+        } else if (!previous.equals(id, ignoreCase = true)) {
+            // user names are matched without case, so a retyped name keeps its data
             wipe()
         }
         settings.setAccount(id)

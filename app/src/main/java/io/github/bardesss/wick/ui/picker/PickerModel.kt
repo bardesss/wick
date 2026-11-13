@@ -108,6 +108,9 @@ private fun fold(entries: List<PickerEntry>, collapsed: Set<String>): List<Picke
     return result
 }
 
+/** How long an armed two-tap action waits for its second tap before it drops. */
+const val ARM_TIMEOUT_MS = 4000L
+
 /** The two taps of "Mark all read": the first arms it, the second confirms. */
 @Stable
 class MarkAllArm {

@@ -2,6 +2,7 @@ package io.github.bardesss.wick.data
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
@@ -21,7 +22,9 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.security.KeyStore
+import java.security.UnrecoverableKeyException
 import java.util.Base64
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -76,6 +79,15 @@ class KeystoreTokenCipher(private val alias: String = "wick_auth") : TokenCipher
     }
 }
 
+private const val DECRYPT_ATTEMPTS = 3
+
+/** Only these mean the stored value can never be read again; anything else may pass. */
+private fun isPermanent(e: Exception): Boolean =
+    e is AEADBadTagException ||
+        e is KeyPermanentlyInvalidatedException ||
+        e is UnrecoverableKeyException ||
+        e is IllegalArgumentException
+
 class KeystoreCredentialStore(
     private val store: DataStore<Preferences>,
     private val cipher: TokenCipher,
@@ -126,13 +138,28 @@ class KeystoreCredentialStore(
     private suspend fun load(): Auth? {
         val prefs = store.data.first()
         val stored = prefs[key] ?: return null
-        val auth = runCatching {
-            val plain = cipher.decrypt(Base64.getDecoder().decode(stored)).toString(Charsets.UTF_8)
-            val (server, token) = plain.split("\n", limit = 2)
-            Auth(server, token)
-        }.getOrNull()
+        var auth: Auth? = null
+        var permanent = false
+        for (attempt in 1..DECRYPT_ATTEMPTS) {
+            try {
+                val plain = cipher.decrypt(Base64.getDecoder().decode(stored)).toString(Charsets.UTF_8)
+                val parts = plain.split('\n', limit = 2)
+                if (parts.size < 2) {
+                    permanent = true
+                    break
+                }
+                auth = Auth(parts[0], parts[1])
+                break
+            } catch (e: Exception) {
+                if (isPermanent(e)) {
+                    permanent = true
+                    break
+                }
+            }
+        }
         if (auth == null) {
-            store.edit { it.remove(key) }
+            // a failure that may pass keeps the stored value for the next start
+            if (permanent) runCatching { store.edit { it.remove(key) } }
             return null
         }
         if (prefs[formatKey] == STORE_FORMAT) return auth
