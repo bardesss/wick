@@ -286,7 +286,8 @@ class ListViewModel(
         var firstIndex = Int.MAX_VALUE
         for (item in frame.items) {
             current[item.id] = item.index
-            if (item.index < firstIndex) firstIndex = item.index
+            // a row kept composed above the viewport must not hold the first index back
+            if (item.offset + item.size > frame.viewportStart && item.index < firstIndex) firstIndex = item.index
             if (item.id in readNow || item.size <= 0) continue
             val top = maxOf(item.offset, frame.viewportStart)
             val bottom = minOf(item.offset + item.size, frame.viewportEnd)

@@ -343,6 +343,33 @@ class ListViewModelTest {
     }
 
     @Test
+    fun row_dropped_below_a_pinned_row_is_marked_read() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        api.addItem("p", "feed/1", 50)
+        api.addItem("c", "feed/1", 300)
+        api.addItem("d", "feed/1", 400)
+        val vm = vm()
+        ids(vm, listOf("d", "c", "b", "a", "p"))
+        settle(vm.refreshing) { !it }
+
+        fun at(t: Long, vararg rows: Triple<String, Int, Int>) = ListFrame(
+            nowMs = t,
+            viewportStart = 0,
+            viewportEnd = 800,
+            items = rows.map { (id, index, offset) -> FrameItem(id, index, offset, 100) },
+            shown = null,
+        )
+        // p is kept composed above the viewport; b is the first row on screen
+        for (t in 0L..400L step 16) {
+            vm.onVisible(at(t, Triple("p", 0, -150), Triple("b", 5, 0), Triple("a", 6, 100), Triple("c", 7, 200)))
+        }
+        vm.onVisible(at(420, Triple("p", 0, -150), Triple("a", 6, 0), Triple("c", 7, 100), Triple("d", 8, 200)))
+
+        assertEquals(setOf("b"), settle(vm.read) { it == setOf("b") })
+    }
+
+    @Test
     fun recently_read_lists_what_was_read_here_and_scrolling_marks_nothing() = runTest(main, timeout = 30.seconds) {
         engine()
         seedServer()
