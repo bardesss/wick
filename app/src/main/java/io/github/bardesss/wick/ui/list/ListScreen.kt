@@ -211,7 +211,6 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     val markedRead = stringResource(R.string.list_marked_read)
     val markedUnread = stringResource(R.string.list_marked_unread)
     var sheetId by rememberSaveable { mutableStateOf<String?>(null) }
-    val sheetKept = remember { arrayOfNulls<RowModel>(1) }
 
     val linkTarget by vm.linkTarget.collectAsStateWithLifecycle(LinkTarget.InApp)
     val open = remember(vm, context, linkTarget) {
@@ -290,8 +289,13 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     }
 
     // a refresh may drop the row; the open sheet keeps showing it until the user closes it
-    val sheetRow = sheetId?.let { id -> rows?.firstOrNull { it.id == id } ?: sheetKept[0]?.takeIf { it.id == id } }
-    sheetKept[0] = sheetRow
+    // the kept row lives in the view model so it survives rotation too
+    val sheetRow = sheetId?.let { id -> rows?.firstOrNull { it.id == id } ?: vm.sheetKept?.takeIf { it.id == id } }
+    vm.sheetKept = sheetRow
+    // an id with no row anywhere (process death) must not reopen the sheet by itself later
+    LaunchedEffect(sheetId, rows) {
+        if (sheetId != null && rows != null && sheetRow == null) sheetId = null
+    }
     if (sheetRow != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val body by produceState<SheetBody>(SheetBody.Loading, sheetRow.id) {
@@ -362,8 +366,16 @@ fun ListContent(
     var query by rememberSaveable(history) { mutableStateOf(searchPreview?.takeIf { history }) }
     BackHandler(enabled = query != null) { query = null }
     val found = remember(rows, query) { query?.let { q -> rows?.let { searchRows(it, q) } } ?: rows }
-    // each new search starts at the top of what it found
-    LaunchedEffect(query) { if (query != null) listState.scrollToItem(0) }
+    // each new search starts at the top of what it found; a restored one keeps its position
+    var scrolledFor by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(query) {
+        if (query == null) {
+            scrolledFor = null
+        } else if (query != scrolledFor) {
+            listState.scrollToItem(0)
+            scrolledFor = query
+        }
+    }
     val frameSink by rememberUpdatedState(onFrame)
     val shownRows by rememberUpdatedState(found)
     LaunchedEffect(listState) {

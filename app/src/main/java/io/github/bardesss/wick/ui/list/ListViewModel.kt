@@ -127,6 +127,9 @@ class ListViewModel(
         .flowOn(work)
         .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 1)
 
+    /** The row the open sheet shows, so it outlives a refresh that drops it and a rotation. */
+    var sheetKept: RowModel? = null
+
     /** Ids of the snapshot rows that are read. */
     val read: StateFlow<Set<String>> = marks.map { it.read }
         .distinctUntilChanged()
