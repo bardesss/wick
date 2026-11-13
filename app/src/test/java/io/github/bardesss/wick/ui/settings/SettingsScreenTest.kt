@@ -97,6 +97,19 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun armed_sign_out_disarms_after_three_seconds() {
+        show()
+
+        rule.onNodeWithText("Sign out").performClick()
+        rule.onNodeWithText("Tap again to sign out").assertExists()
+        rule.mainClock.advanceTimeBy(3000)
+        rule.waitForIdle()
+
+        rule.onNodeWithText("Sign out").assertExists()
+        assertEquals(0, signOuts)
+    }
+
+    @Test
     fun close_button_closes_settings() {
         show()
 

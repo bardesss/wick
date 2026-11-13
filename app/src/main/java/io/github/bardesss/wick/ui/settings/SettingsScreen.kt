@@ -28,6 +28,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,27 +45,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.Icon
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import io.github.bardesss.wick.ui.picker.MarkAllArm
-import kotlinx.coroutines.delay
 import io.github.bardesss.wick.BuildConfig
 import io.github.bardesss.wick.R
 import io.github.bardesss.wick.data.LinkTarget
 import io.github.bardesss.wick.data.SettingsStore
+import io.github.bardesss.wick.ui.HeaderIcon
 import io.github.bardesss.wick.ui.Wordmark
 import io.github.bardesss.wick.ui.openLink
+import io.github.bardesss.wick.ui.picker.ARM_TIMEOUT_MS
+import io.github.bardesss.wick.ui.picker.MarkAllArm
 import io.github.bardesss.wick.ui.theme.InstrumentSans
 import io.github.bardesss.wick.ui.theme.TapTarget
 import io.github.bardesss.wick.ui.theme.WickColors
 import io.github.bardesss.wick.ui.theme.WickText
+import kotlinx.coroutines.delay
 
 private val LabelStyle = TextStyle(fontFamily = InstrumentSans, fontWeight = FontWeight.Medium, fontSize = 12.5.sp, letterSpacing = 0.4.sp)
 private val RowStyle = TextStyle(fontFamily = InstrumentSans, fontSize = 16.sp)
@@ -72,7 +67,6 @@ private val SegmentPadding = PaddingValues(horizontal = 12.dp)
 
 // every setting row has the same height, whatever control it holds
 private val RowHeight = 60.dp
-private const val ARM_TIMEOUT_MS = 3000L
 private const val PROJECT_URL = "https://github.com/bardesss/wick"
 
 /** Null for a setting that has not been read yet; its control shows no choice and waits until it is. */
@@ -123,17 +117,7 @@ fun SettingsScreen(
                         .heightIn(min = TapTarget)
                         .wrapContentHeight(Alignment.CenterVertically),
                 )
-                val closeLabel = stringResource(R.string.settings_close)
-                Box(
-                    Modifier
-                        .heightIn(min = TapTarget)
-                        .widthIn(min = TapTarget)
-                        .semantics { role = Role.Button; contentDescription = closeLabel }
-                        .clickable(onClick = onClose),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(painter = painterResource(R.drawable.ic_close), contentDescription = null, tint = WickColors.Amber, modifier = Modifier.size(22.dp))
-                }
+                HeaderIcon(R.drawable.ic_close, stringResource(R.string.settings_close), onClose)
             }
 
             TwoChoiceRow(
