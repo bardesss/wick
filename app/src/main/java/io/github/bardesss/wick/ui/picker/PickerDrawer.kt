@@ -193,6 +193,7 @@ private fun EntryRow(
         Row(
             Modifier
                 .weight(1f)
+                .heightIn(min = TapTarget)
                 .semantics { this.selected = selected }
                 .clickable(role = Role.Button, onClick = onClick)
                 .padding(start = if (folder != null) 8.dp else start, end = 22.dp, top = 11.dp, bottom = 11.dp),
