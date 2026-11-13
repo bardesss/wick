@@ -14,7 +14,12 @@ import io.github.bardesss.wick.data.SettingsStore
 import io.github.bardesss.wick.db.CountEntity
 import io.github.bardesss.wick.db.FeedEntity
 import io.github.bardesss.wick.db.ItemEntity
+import io.github.bardesss.wick.db.LocalState
 import io.github.bardesss.wick.db.PendingMarkAllEntity
+import io.github.bardesss.wick.db.SnapshotDao
+import io.github.bardesss.wick.db.SnapshotEntity
+import io.github.bardesss.wick.db.SnapshotMetaEntity
+import io.github.bardesss.wick.db.SnapshotRow
 import io.github.bardesss.wick.db.WickDb
 import io.github.bardesss.wick.sync.FakeReaderApi
 import io.github.bardesss.wick.sync.MarkQueue
@@ -27,6 +32,7 @@ import io.github.bardesss.wick.ui.picker.PickerEntry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -91,7 +97,7 @@ class ListViewModelTest {
         sync = SyncEngine(api, db, queue)
     }
 
-    private fun TestScope.vm(handle: SavedStateHandle = SavedStateHandle()): ListViewModel {
+    private fun TestScope.vm(handle: SavedStateHandle = SavedStateHandle(), snapshots: SnapshotDao = db.snapshotDao()): ListViewModel {
         val store = ViewModelStore().also { stores += it }
         val factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -99,7 +105,7 @@ class ListViewModelTest {
                 savedState = handle,
                 itemDao = db.itemDao(),
                 feedDao = db.feedDao(),
-                snapshotDao = db.snapshotDao(),
+                snapshotDao = snapshots,
                 sync = sync,
                 queue = queue,
                 settings = settings,
@@ -692,5 +698,79 @@ class ListViewModelTest {
 
         assertEquals(StreamId.All, settle(vm.view) { it == StreamId.All })
         assertEquals(listOf("b", "a"), ids(vm, listOf("b", "a")))
+    }
+
+    /** The real snapshot store, except that the write after [holdNext] waits for [gate]. */
+    private class HeldSnapshots(private val real: SnapshotDao) : SnapshotDao() {
+        var holdNext = false
+        val gate = CompletableDeferred<Unit>()
+
+        override suspend fun clear() = error("unused")
+        override suspend fun insert(rows: List<SnapshotEntity>) = error("unused")
+        override suspend fun setMeta(meta: SnapshotMetaEntity) = error("unused")
+        override fun snapshotIds(): Flow<List<String>> = real.snapshotIds()
+        override suspend fun writtenAt(): Long? = real.writtenAt()
+        override suspend fun viewRaw(): String? = real.viewRaw()
+        override suspend fun rowsNow(): List<SnapshotRow> = real.rowsNow()
+        override fun states(): Flow<List<LocalState>> = real.states()
+
+        override suspend fun replaceSnapshot(ids: List<String>, writtenAtMs: Long, viewRaw: String) {
+            if (holdNext) {
+                holdNext = false
+                gate.await()
+            }
+            real.replaceSnapshot(ids, writtenAtMs, viewRaw)
+        }
+    }
+
+    @Test
+    fun quick_view_switches_leave_the_last_views_list() = runTest(main, timeout = 30.seconds) {
+        engine()
+        seedServer()
+        api.addItem("c", "feed/2", 300)
+        val snapshots = HeldSnapshots(db.snapshotDao())
+        val vm = vm(snapshots = snapshots)
+        ids(vm, listOf("c", "b", "a"))
+        settle(vm.refreshing) { !it }
+        val server = CompletableDeferred<Unit>()
+        api.beforeUnread = { fetches++; server.await() }
+
+        // the list for feed 1 is still being written when feed 2 is picked
+        snapshots.holdNext = true
+        vm.select(StreamId.Feed("feed/1"))
+        runCurrent()
+        vm.select(StreamId.Feed("feed/2"))
+        runCurrent()
+        snapshots.gate.complete(Unit)
+
+        assertEquals(listOf("c"), ids(vm, listOf("c")))
+        runCurrent()
+        assertEquals(StreamId.Feed("feed/2").raw, db.snapshotDao().viewRaw())
+        assertEquals(listOf("c"), vm.rows.value?.map { it.id })
+        server.complete(Unit)
+    }
+
+    @Test
+    fun mark_all_ignores_rows_of_another_view() = runTest(main, timeout = 30.seconds) {
+        engine()
+        db.feedDao().replaceAll(listOf(FeedEntity("feed/1", "News", null, null), FeedEntity("feed/2", "Other", null, null)))
+        db.itemDao().upsertKeepingLocal(
+            listOf(
+                ItemEntity("a", "feed/1", "T a", null, 100, null, read = false),
+                ItemEntity("b", "feed/1", "T b", null, 200, null, read = false),
+                ItemEntity("c", "feed/2", "T c", null, 300, null, read = false),
+            ),
+        )
+        // the stored list belongs to all unread and holds a newer item of feed 2
+        db.snapshotDao().replaceSnapshot(listOf("c", "b", "a"), writtenAtMs = now, viewRaw = StreamId.All.raw)
+        val handle = SavedStateHandle().apply { set("view", StreamId.Feed("feed/1").raw) }
+        val vm = vm(handle)
+        ids(vm, listOf("c", "b", "a"))
+        assertEquals(StreamId.Feed("feed/1"), vm.view.value)
+
+        vm.markAllRead()
+        awaitMarkAll()
+
+        assertEquals(listOf(StreamId.Feed("feed/1").raw to (200 + 1) * 1_000_000L), api.markAllCalls)
     }
 }
