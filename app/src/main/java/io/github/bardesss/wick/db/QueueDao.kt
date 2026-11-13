@@ -62,16 +62,54 @@ abstract class QueueDao {
     )
     abstract suspend fun dropUnreadMarksForReadItems()
 
+    @Query(
+        "DELETE FROM PendingMarkEntity WHERE read = 1 AND itemId IN " +
+            "(SELECT id FROM ItemEntity WHERE publishedSec <= :publishedAtOrBeforeSec)",
+    )
+    protected abstract suspend fun dropReadMarksUpTo(publishedAtOrBeforeSec: Long)
+
+    @Query(
+        "DELETE FROM PendingMarkEntity WHERE read = 1 AND itemId IN " +
+            "(SELECT id FROM ItemEntity WHERE feedId IN (:feedIds) AND publishedSec <= :publishedAtOrBeforeSec)",
+    )
+    protected abstract suspend fun dropReadMarksOfFeedsUpTo(feedIds: List<String>, publishedAtOrBeforeSec: Long)
+
+    /**
+     * Drops pending read marks for the items a mark-all covers (same scope and cutoff as
+     * [ItemDao.markReadWhere]), so a later unread mark on one of them is queued, not cancelled.
+     */
+    @Transaction
+    open suspend fun dropReadMarksCoveredBy(feedIds: List<String>?, publishedAtOrBeforeSec: Long) {
+        if (feedIds == null) {
+            dropReadMarksUpTo(publishedAtOrBeforeSec)
+        } else {
+            feedIds.chunked(CHUNK).forEach { dropReadMarksOfFeedsUpTo(it, publishedAtOrBeforeSec) }
+        }
+    }
+
     /**
      * A mark that reverses a pending one cancels it, otherwise the newest mark replaces the old
-     * one. A pending mark that is being sent right now ([inFlight]) is never cancelled, because
-     * the server may already have it.
+     * one. A pending mark that is being sent right now ([inFlight]) or a send of it has started (attempted)
+     * is never cancelled, because the server may already have it.
      */
     @Transaction
     open suspend fun enqueueOrCancel(mark: PendingMarkEntity, inFlight: Boolean) {
         val existing = find(mark.itemId)
-        if (existing != null && existing.read != mark.read && !inFlight) deleteOne(mark.itemId) else enqueue(mark)
+        if (existing != null && existing.read != mark.read && !existing.attempted && !inFlight) {
+            deleteOne(mark.itemId)
+        } else {
+            enqueue(mark.copy(attempted = existing?.attempted ?: false))
+        }
     }
+
+    /** Flags marks whose send is about to start. */
+    @Transaction
+    open suspend fun markAttempted(ids: List<String>) {
+        ids.chunked(CHUNK).forEach { markAttemptedChunk(it) }
+    }
+
+    @Query("UPDATE PendingMarkEntity SET attempted = 1 WHERE itemId IN (:ids)")
+    protected abstract suspend fun markAttemptedChunk(ids: List<String>)
 
     /**
      * Records that the server accepted [marks]: removes the rows that were not re-queued since,

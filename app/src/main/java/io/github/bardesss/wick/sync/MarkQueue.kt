@@ -90,6 +90,7 @@ class MarkQueue(
         ops.trySend {
             inTransaction {
                 itemDao.markReadWhere(feedIds, newestLoadedSec)
+                queueDao.dropReadMarksCoveredBy(feedIds, newestLoadedSec)
                 queueDao.dropUnreadMarksForReadItems()
                 queueDao.enqueueAll(
                     PendingMarkAllEntity(streamRaw = stream.raw, olderThanUsec = (newestLoadedSec + 1) * 1_000_000),
@@ -130,14 +131,23 @@ class MarkQueue(
                 queueDao.completeMarkAll(m)
             } catch (e: ApiError) {
                 if (e.stopsFlush()) return false
-                clean = false
+                if (e is ApiError.Http && e.code in 400..499 && e.code != 408 && e.code != 429) {
+                    // the server will never accept it; keeping it would hold back every item mark
+                    Log.w(LOG_TAG, "dropping a mark all the server rejected with ${e.code}")
+                    queueDao.deleteAll(m.id)
+                } else {
+                    clean = false
+                }
             }
         }
         // A mark-all that is still queued would be resent later and undo newer item marks.
         if (!clean) return false
 
         val marks = stateLock.withLock {
-            queueDao.pending().also { snapshot -> inFlight.addAll(snapshot.map { it.itemId }) }
+            queueDao.pending().also { snapshot ->
+                inFlight.addAll(snapshot.map { it.itemId })
+                queueDao.markAttempted(snapshot.map { it.itemId })
+            }
         }
         try {
             for (read in listOf(true, false)) {

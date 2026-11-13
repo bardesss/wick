@@ -87,6 +87,13 @@ abstract class ItemDao {
     )
     protected abstract suspend fun unreadIn(feedIds: List<String>, oldestFirst: Boolean): List<String>
 
+    @Query(
+        "SELECT id, feedId FROM ItemEntity WHERE read = 0 ORDER BY " +
+            "CASE WHEN :oldestFirst = 1 THEN publishedSec END ASC, " +
+            "CASE WHEN :oldestFirst = 0 THEN publishedSec END DESC, id ASC",
+    )
+    protected abstract suspend fun unreadWithFeed(oldestFirst: Boolean): List<ItemFeed>
+
     // rows in the list snapshot stay until the snapshot is replaced, and the ones read here last stay for good
     @Query(
         "SELECT id FROM ItemEntity WHERE read = 1 " +
@@ -184,6 +191,13 @@ abstract class ItemDao {
     open suspend fun newestUnreadSec(feedIds: List<String>?): Long? =
         if (feedIds == null) newestUnreadAll() else feedIds.chunked(CHUNK).mapNotNull { newestUnreadIn(it) }.maxOrNull()
 
-    open suspend fun unreadIds(feedIds: List<String>?, oldestFirst: Boolean): List<String> =
-        if (feedIds == null) unreadAll(oldestFirst) else unreadIn(feedIds, oldestFirst)
+    open suspend fun unreadIds(feedIds: List<String>?, oldestFirst: Boolean): List<String> = when {
+        feedIds == null -> unreadAll(oldestFirst)
+        feedIds.size <= CHUNK -> unreadIn(feedIds, oldestFirst)
+        // too many feeds for one IN list: read every unread row in order and filter here
+        else -> {
+            val wanted = feedIds.toHashSet()
+            unreadWithFeed(oldestFirst).filter { it.feedId in wanted }.map { it.id }
+        }
+    }
 }

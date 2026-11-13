@@ -45,7 +45,7 @@ class SyncWorkerTest {
         db.close()
     }
 
-    private suspend fun runWorker(flushOnly: Boolean = false): ListenableWorker.Result {
+    private suspend fun runWorker(flushOnly: Boolean = false, runAttemptCount: Int = 0): ListenableWorker.Result {
         val queue = db.newQueue(api, CoroutineScope(Job()))
         val factory = SyncWorkerFactory(
             auth = { auth },
@@ -55,6 +55,7 @@ class SyncWorkerTest {
         val worker = TestListenableWorkerBuilder<SyncWorker>(context)
             .setWorkerFactory(factory)
             .setInputData(SyncWorker.input(flushOnly))
+            .setRunAttemptCount(runAttemptCount)
             .build()
         return worker.doWork()
     }
@@ -74,6 +75,25 @@ class SyncWorkerTest {
         api.failNext(10, ApiError.Unreachable)
 
         assertEquals(ListenableWorker.Result.success(), runWorker())
+    }
+
+    @Test
+    fun flush_only_retries_while_marks_remain() = runTest {
+        seedPendingRead()
+        api.failNext(10, ApiError.Unreachable)
+
+        assertEquals(ListenableWorker.Result.retry(), runWorker(flushOnly = true))
+    }
+
+    @Test
+    fun flush_only_gives_up_after_five_attempts() = runTest {
+        seedPendingRead()
+        api.failNext(10, ApiError.Unreachable)
+
+        assertEquals(
+            ListenableWorker.Result.success(),
+            runWorker(flushOnly = true, runAttemptCount = MAX_FLUSH_ATTEMPTS),
+        )
     }
 
     @Test

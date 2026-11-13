@@ -181,6 +181,22 @@ class ItemDaoTest {
     }
 
     @Test
+    fun unread_ids_for_more_feeds_than_chunk_keep_order() = runTest {
+        val feedIds = (0 until 600).map { "feed$it" }
+        items.upsertKeepingLocal(
+            listOf(
+                item("a", feedId = "feed0", publishedSec = 100),
+                item("b", feedId = "feed299", publishedSec = 300),
+                item("c", feedId = "feed599", publishedSec = 300),
+                item("d", feedId = "feed599", publishedSec = 200),
+                item("x", feedId = "other", publishedSec = 400),
+            ),
+        )
+        assertEquals(listOf("b", "c", "d", "a"), items.unreadIds(feedIds, oldestFirst = false))
+        assertEquals(listOf("a", "d", "b", "c"), items.unreadIds(feedIds, oldestFirst = true))
+    }
+
+    @Test
     fun markReadWhere_respects_cutoff_and_feeds() = runTest {
         items.upsertKeepingLocal(
             listOf(

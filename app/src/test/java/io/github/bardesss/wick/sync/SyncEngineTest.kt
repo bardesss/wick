@@ -253,6 +253,29 @@ class SyncEngineTest {
     }
 
     @Test
+    fun refresh_stops_when_the_server_repeats_its_continuation() = runTest {
+        repeat(3) { api.addItem("i$it", "feed/1", it.toLong()) }
+        api.stuckContinuation = "c"
+        val engine = engine()
+
+        val result = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+
+        assertTrue(result.capped)
+        assertTrue(api.unreadCalls <= 2)
+    }
+
+    @Test
+    fun refresh_stops_when_continuation_repeats_with_new_items() = runTest {
+        api.fixedContinuationWithFreshItems = "c"
+        val engine = engine()
+
+        val result = engine.refresh(StreamId.All, oldestFirst = false).getOrThrow()
+
+        assertTrue(result.capped)
+        assertEquals(2, api.unreadCalls)
+    }
+
+    @Test
     fun refresh_says_when_a_mark_all_stays_queued() = runTest {
         api.addItem("a", "feed/1", 100)
         db.queueDao().enqueueAll(PendingMarkAllEntity(streamRaw = StreamId.All.raw, olderThanUsec = 1_000_000))

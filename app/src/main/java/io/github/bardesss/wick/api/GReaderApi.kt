@@ -156,13 +156,13 @@ class GReaderApi(
             try {
                 execute(request)
                 return
-            } catch (e: ApiError.BadCredentials) {
-                if (!retried) {
-                    retried = true
-                    editToken = null
-                } else {
-                    throw e
-                }
+            } catch (e: ApiError) {
+                // servers reject a stale edit token with 400 or 403 as well as 401
+                val staleToken = e is ApiError.BadCredentials || e is ApiError.Forbidden ||
+                    (e is ApiError.Http && e.code == 400)
+                if (!staleToken || retried) throw e
+                retried = true
+                editToken = null
             }
         }
     }

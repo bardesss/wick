@@ -39,6 +39,8 @@ data class PendingMarkEntity(
     @PrimaryKey val itemId: String,
     val read: Boolean,
     val queuedAt: Long,
+    /** Set once a send has started, so the server may have it even if the reply never came. */
+    @ColumnInfo(defaultValue = "0") val attempted: Boolean = false,
 )
 
 @Entity

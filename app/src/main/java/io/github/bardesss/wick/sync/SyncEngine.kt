@@ -122,11 +122,15 @@ class SyncEngine(
         val counts = api.unreadCounts()
         val items = LinkedHashMap<String, Item>()
         var continuation: String? = null
+        var stalled = false
         do {
             val page = api.unread(view, oldestFirst, PAGE_SIZE, continuation)
+            val before = items.size
             page.items.forEach { items.putIfAbsent(it.id, it) }
+            // a server that repeats itself or adds nothing new would page forever
+            stalled = page.continuation != null && (items.size == before || page.continuation == continuation)
             continuation = page.continuation
-        } while (continuation != null && items.size < MAX_ITEMS)
+        } while (continuation != null && !stalled && items.size < MAX_ITEMS)
         val list = items.values.toList().take(MAX_ITEMS)
         return Fetched(feeds, counts, list, complete = continuation == null)
     }

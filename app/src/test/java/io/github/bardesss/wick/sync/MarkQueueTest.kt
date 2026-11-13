@@ -50,6 +50,31 @@ class MarkQueueTest {
     private fun row(id: String) = db.storedItems(listOf(id)).single()
 
     @Test
+    fun unread_after_mark_all_keeps_item_unread_on_server() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.mark("a", read = true, manual = false)
+        q.markAll(StreamId.All, null, newestLoadedSec = 100)
+        q.mark("a", read = false, manual = true)
+        runCurrent()
+        assertTrue(q.flush())
+        assertFalse(api.isRead("a"))
+        assertTrue(api.isRead("b"))
+        assertTrue(db.queueDao().pending().isEmpty())
+    }
+
+    @Test
+    fun mark_all_keeps_read_marks_it_does_not_cover() = runTest {
+        seed("a", publishedSec = 100)
+        seed("c", publishedSec = 200)
+        val q = queue()
+        q.mark("c", read = true, manual = false)
+        q.markAll(StreamId.All, null, newestLoadedSec = 100)
+        runCurrent()
+        assertEquals(listOf("c"), db.queueDao().pending().map { it.itemId })
+    }
+
+    @Test
     fun mark_is_local_immediately_and_sent_after_flush() = runTest {
         seed("a", "b")
         val q = queue()
@@ -131,6 +156,37 @@ class MarkQueueTest {
     }
 
     @Test
+    fun reversal_after_uncertain_send_is_sent_not_cancelled() = runTest {
+        seed("a")
+        val q = queue()
+        q.mark("a", read = true, manual = false)
+        runCurrent()
+        api.failNextAfterApplying(1)
+        assertFalse(q.flush())
+        assertTrue(api.isRead("a"))
+        q.mark("a", read = false, manual = true)
+        runCurrent()
+        assertTrue(q.flush())
+        assertFalse(api.isRead("a"))
+    }
+
+    @Test
+    fun requeued_mark_stays_flagged_after_uncertain_send() = runTest {
+        seed("a")
+        val q = queue()
+        q.mark("a", read = true, manual = false)
+        runCurrent()
+        api.failNextAfterApplying(1)
+        assertFalse(q.flush())
+        q.mark("a", read = true, manual = false)
+        runCurrent()
+        q.mark("a", read = false, manual = true)
+        runCurrent()
+        assertTrue(q.flush())
+        assertFalse(api.isRead("a"))
+    }
+
+    @Test
     fun reversal_cancels_pending_mark() = runTest {
         seed("a")
         val q = queue()
@@ -191,6 +247,44 @@ class MarkQueueTest {
 
         assertTrue(q.flush())
         assertEquals(listOf(listOf("a") to false), api.setReadCalls)
+    }
+
+    @Test
+    fun mark_all_rejected_with_4xx_is_dropped_and_item_marks_flow() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.markAll(StreamId.Feed("feed/1"), listOf("feed/1"), 100)
+        q.mark("b", read = false, manual = true)
+        runCurrent()
+
+        api.failNext(1, ApiError.Http(404))
+        assertTrue(q.flush())
+        assertTrue(db.queueDao().pendingAll().isEmpty())
+        assertFalse(api.isRead("b"))
+    }
+
+    @Test
+    fun mark_all_failing_with_5xx_stays_queued() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.markAll(StreamId.Feed("feed/1"), listOf("feed/1"), 100)
+        runCurrent()
+
+        api.failNext(1, ApiError.Http(503))
+        assertFalse(q.flush())
+        assertEquals(1, db.queueDao().pendingAll().size)
+    }
+
+    @Test
+    fun mark_all_rate_limited_stays_queued() = runTest {
+        seed("a", "b")
+        val q = queue()
+        q.markAll(StreamId.Feed("feed/1"), listOf("feed/1"), 100)
+        runCurrent()
+
+        api.failNext(1, ApiError.Http(429))
+        assertFalse(q.flush())
+        assertEquals(1, db.queueDao().pendingAll().size)
     }
 
     @Test
