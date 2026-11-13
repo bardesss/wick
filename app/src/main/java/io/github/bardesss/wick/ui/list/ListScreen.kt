@@ -213,11 +213,17 @@ fun ListScreen(vm: ListViewModel, onOpenSettings: () -> Unit) {
     var sheetId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val linkTarget by vm.linkTarget.collectAsStateWithLifecycle(LinkTarget.InApp)
-    val open = remember(vm, context, linkTarget) {
+    val noBrowser = stringResource(R.string.list_no_browser)
+    val open = remember(vm, context, linkTarget, noBrowser) {
         { row: RowModel ->
             row.url?.takeIf(::isWebUrl)?.let { url ->
-                openLink(context, url, linkTarget)
-                vm.open(row.id)
+                // a row is read only once its link really opened
+                if (openLink(context, url, linkTarget)) {
+                    vm.open(row.id)
+                } else {
+                    toast[0]?.cancel()
+                    toast[0] = scope.launch { snackbar.showSnackbar(noBrowser) }
+                }
             }
             Unit
         }

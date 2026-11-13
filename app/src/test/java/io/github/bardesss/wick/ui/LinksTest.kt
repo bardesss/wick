@@ -2,7 +2,11 @@ package io.github.bardesss.wick.ui
 
 import android.content.Intent
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.test.core.app.ApplicationProvider
 import io.github.bardesss.wick.data.LinkTarget
+import org.robolectric.Shadows.shadowOf
+import android.app.Activity
+import org.robolectric.Robolectric
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -47,5 +51,31 @@ class LinksTest {
         assertFalse(isWebUrl("file:///sdcard/a"))
         assertFalse(isWebUrl("javascript:alert(1)"))
         assertFalse(isWebUrl(""))
+    }
+
+    @Test
+    fun upper_case_scheme_is_normalised() {
+        val intent = linkIntent("HTTPS://a.example/x", LinkTarget.DefaultApp)!!
+        assertEquals("https", intent.data!!.scheme)
+    }
+
+    @Test
+    fun leading_space_is_trimmed() {
+        assertTrue(isWebUrl(" https://a.example"))
+        assertEquals("https://a.example", linkIntent(" https://a.example ", LinkTarget.DefaultApp)!!.dataString)
+    }
+
+    @Test
+    fun open_link_reports_when_nothing_opens_it() {
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).checkActivities(true)
+        val activity = Robolectric.buildActivity(Activity::class.java).get()
+        for (target in LinkTarget.entries) assertFalse(openLink(activity, "https://a.example/x", target))
+    }
+
+    @Test
+    fun open_link_reports_true_when_an_activity_starts() {
+        val activity = Robolectric.buildActivity(Activity::class.java).get()
+        assertTrue(openLink(activity, "https://a.example/x", LinkTarget.DefaultApp))
+        assertFalse(openLink(activity, "market://details?id=x", LinkTarget.DefaultApp))
     }
 }
