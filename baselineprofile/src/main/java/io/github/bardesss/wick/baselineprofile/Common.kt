@@ -11,7 +11,11 @@ private const val WAIT_MS = 10_000L
 /** Starts the app from a cold process with 500 fake items, no network, and waits for the list. */
 fun MacrobenchmarkScope.startWithFakeData() {
     pressHome()
-    startActivityAndWait(Intent().putExtra("wick.fake", 500))
+    // without a component, Android shows the app chooser instead of opening the app
+    val launch = Intent(Intent.ACTION_MAIN)
+        .setClassName(packageName, "io.github.bardesss.wick.MainActivity")
+        .putExtra("wick.fake", 500)
+    startActivityAndWait(launch)
     device.wait(Until.hasObject(By.res("row")), WAIT_MS)
 }
 
