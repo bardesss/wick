@@ -8,9 +8,21 @@ import coil3.fetch.SourceFetchResult
 import coil3.request.Options
 import coil3.svg.SvgDecoder
 import okio.Buffer
+import okio.BufferedSource
+import java.io.IOException
 
-// a declaration such as fill:color(display-p3 .98 .3 0), with or without its semicolon
-private val WideGamutDeclaration = Regex("""[a-zA-Z-]+\s*:\s*color\([^)]*\)\s*;?""")
+// a declaration such as fill:color(display-p3 .98 .3 0), with or without its semicolon; a match
+// only starts at the start of a property name, so a long run of letters stays linear
+private val WideGamutDeclaration = Regex("""(?<![a-zA-Z-])[a-zA-Z-]+\s*:\s*color\([^)]*\)\s*;?""")
+
+/** Largest svg the icon decoder reads; anything bigger fails the decode and the row keeps its letter tile. */
+internal const val MAX_SVG_BYTES = 1_000_000L
+
+/** Reads the whole source as text, throwing [IOException] when it holds more than [maxBytes]. */
+internal fun readSvgText(source: BufferedSource, maxBytes: Long = MAX_SVG_BYTES): String {
+    if (source.request(maxBytes + 1)) throw IOException("svg is larger than $maxBytes bytes")
+    return source.readUtf8()
+}
 
 /**
  * Design tools write a plain colour followed by a display-p3 one, for example
@@ -22,7 +34,7 @@ fun withoutWideGamutColours(svg: String): String = WideGamutDeclaration.replace(
 /** Decodes svg icons through [withoutWideGamutColours]; anything else is left to other decoders. */
 class SvgIconDecoder(private val result: SourceFetchResult, private val options: Options) : Decoder {
     override suspend fun decode(): DecodeResult {
-        val text = result.source.source().use { it.readUtf8() }
+        val text = result.source.source().use { readSvgText(it) }
         val source = ImageSource(Buffer().writeUtf8(withoutWideGamutColours(text)), options.fileSystem)
         return SvgDecoder(source, options).decode()
     }
